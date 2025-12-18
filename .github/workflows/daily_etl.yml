@@ -2,8 +2,8 @@ name: Daily Motor ETL Automation
 
 on:
   schedule:
-    # 18:10 UTC (6:10 PM UK/GMT)
-    - cron: '10 18 * * *'
+    # 18:25 UTC (6:25 PM UK/GMT)
+    - cron: '25 18 * * *'
   workflow_dispatch: 
 
 jobs:
