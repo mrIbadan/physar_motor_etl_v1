@@ -2,13 +2,15 @@ name: Daily Motor ETL Automation
 
 on:
   schedule:
-    # 18:25 UTC (6:25 PM UK/GMT)
-    - cron: '25 18 * * *'
+    # Set to 21:25 UTC (approx 10 mins from now)
+    # Format: Minute Hour Day Month Day_of_Week
+    - cron: '25 21 * * *'
   workflow_dispatch: 
 
 jobs:
   run-etl-job:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,9 +23,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # These must match what your v2 script imports
+          pip install pandas numpy faker supabase
 
       - name: Run ETL Script
         env:
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python physar_motor_etl_v1.py
+          # This maps your GitHub secret to an environment variable 
+          # that physar_motor_etl_v2.py will read via os.environ.get
+          SUPABASE_URL: "https://qlpxsymlkhqmhxpqctkj.supabase.co"
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python physar_motor_etl_v2.py
