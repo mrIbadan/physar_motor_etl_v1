@@ -1,0 +1,14 @@
+name: Test Supabase to Databricks Download
+
+on:
+  workflow_dispatch: # This gives you the manual "Run" button in GitHub
+
+jobs:
+  trigger-download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tell Databricks to Download from Supabase
+        run: |
+          curl -X POST -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+          -d '{"job_id": "1833933520503967"}' \
+          https://dbc-51993e40-9fdd.cloud.databricks.com/api/2.1/jobs/run-now
