@@ -22,6 +22,6 @@ jobs:
 
       - name: Run Ingestion Script
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets.https://jxonjddldsakvxqklaqd.supabase.co }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.sb_publishable_ZESybNf1JTKEusRTqDnoaQ_SLVec74A }}
         run: python populate_quotes.py
