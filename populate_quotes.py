@@ -10,8 +10,8 @@ fake = Faker('en_GB')
 
 # 1. AUTHENTICATION BLOCK
 # Using Service Role Key to bypass Row Level Security (RLS) for administrative seeding
-URL = os.environ.get("SUPABASE_URL")
-KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") 
+URL = os.environ.get("https://jxonjddldsakvxqklaqd.supabase.co") # URL
+KEY = os.environ.get("sb_publishable_ZESybNf1JTKEusRTqDnoaQ_SLVec74A") ' Key
 
 if not URL or not KEY:
     raise ValueError("Environment variables SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set.")
