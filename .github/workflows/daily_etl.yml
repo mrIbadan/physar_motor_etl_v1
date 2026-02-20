@@ -25,6 +25,6 @@ jobs:
 
       - name: Run ETL Script
         env:
-          SUPABASE_URL: "https://qlpxsymlkhqmhxpqctkj.supabase.co"
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_URL: "https://jxonjddldsakvxqklaqd.supabase.co"
+          SUPABASE_KEY: ${{ secrets.sb_publishable_ZESybNf1JTKEusRTqDnoaQ_SLVec74A }}
         run: python physar_motor_etl_v2.py
