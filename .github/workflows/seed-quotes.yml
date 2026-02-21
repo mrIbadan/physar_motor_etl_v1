@@ -1,20 +1,10 @@
 name: Seed Supabase Quotes
 
 on:
-  # Manual trigger from Actions tab
-  workflow_dispatch:
-    inputs:
-      total_records:
-        description: "Number of records to generate"
-        required: false
-        default: "1000"
-      batch_size:
-        description: "Batch size for inserts"
-        required: false
-        default: "500"
-  # Optional: run on a schedule (e.g. every day at 08:00 UTC)
   schedule:
-    - cron: "0 8 * * *"
+    # Every 10 minutes between 06:00 and 18:59 UTC, every day
+    - cron: "*/10 6-18 * * *"
+  workflow_dispatch:
 
 jobs:
   run-seed:
@@ -27,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"  # or your preferred version
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -36,9 +26,9 @@ jobs:
 
       - name: Run generator
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}   # once you move off hardcoded
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          TOTAL_RECORDS: ${{ github.event.inputs.total_records || '1000' }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size || '500' }}
+          TOTAL_RECORDS: "10"
+          BATCH_SIZE: "10"
         run: |
           python generate_quotes.py
