@@ -7,7 +7,6 @@ from faker import Faker
 from supabase import create_client, Client
 
 # ---------- 1. CONNECTION (hardcoded for now) ----------
-# These are your tested values. Later we can swap to env vars.
 SUPABASE_URL = "https://jxonjddldsakvxqklaqd.supabase.co"
 SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
 
@@ -29,7 +28,7 @@ CAR_DATA = {
 }
 
 COVER_TYPES = ["Comprehensive", "Third Party", "Third Party, Fire and Theft"]
-SEX_OPTIONS = [True, False]  # interpret as you like
+SEX_OPTIONS = [True, False]
 MARITAL_STATUS = ["Single", "Married", "Divorced", "Widowed"]
 NATIONALITIES = ["UK", "EU", "Other"]
 EMPLOYMENT_STATUS = ["Employed", "Self-Employed", "Student", "Retired", "Unemployed"]
@@ -39,12 +38,34 @@ LICENCE_TYPES = ["Full UK", "Provisional", "EU", "International"]
 PAYMENT_FREQUENCY = ["Annual", "Monthly"]
 TRANSMISSION = ["Manual", "Automatic"]
 
-def random_start_date():
+EMAIL_DOMAINS = [
+    "youmail.com",
+    "randommail.com",
+    "testmail.net",
+    "demoemail.org",
+    "maildemo.io",
+    "sampleinbox.co",
+    "fakedomain.test",
+]
+
+
+def random_start_date() -> str:
     """Start date within ±30 days of today, as ISO string."""
     offset = random.randint(-30, 30)
     return (date.today() + timedelta(days=offset)).isoformat()
 
-def generate_quote(i: int):
+
+def build_random_email() -> str:
+    """Create a fake email on made-up domains (never null)."""
+    first = fake.first_name().lower()
+    last = fake.last_name().lower()
+    num = random.randint(1, 9999)
+    sep = random.choice([".", "_", ""])
+    domain = random.choice(EMAIL_DOMAINS)
+    return f"{first}{sep}{last}{num}@{domain}"
+
+
+def generate_quote(i: int) -> dict:
     """Generate one quote row matching the public.quotes schema."""
     make = random.choice(list(CAR_DATA.keys()))
     model = random.choice(CAR_DATA[make])
@@ -61,6 +82,7 @@ def generate_quote(i: int):
         "title": random.choice(["Mr", "Ms", "Mrs", "Dr"]),
         "first_name": fake.first_name(),
         "last_name": fake.last_name(),
+        "email_address": build_random_email(),
         "date_of_birth": fake.date_of_birth(
             minimum_age=18, maximum_age=75
         ).isoformat(),
@@ -111,7 +133,9 @@ def generate_quote(i: int):
         "created_at": datetime.utcnow().isoformat(),  # timestamptz-compatible
     }
 
-def main(total_records=1000, batch_size=500):
+
+def main(total_records: int = 10, batch_size: int = 10) -> None:
+    """Generate and insert synthetic quotes into Supabase."""
     print(f"Generating {total_records} records...")
     data = [generate_quote(i) for i in range(1, total_records + 1)]
 
@@ -126,7 +150,8 @@ def main(total_records=1000, batch_size=500):
         except Exception as e:
             print(f"❌ Batch failed at index {i}: {e}")
 
+
 if __name__ == "__main__":
-    total = int(os.getenv("TOTAL_RECORDS", "1000"))
-    batch = int(os.getenv("BATCH_SIZE", "500"))
+    total = int(os.getenv("TOTAL_RECORDS", "10"))
+    batch = int(os.getenv("BATCH_SIZE", "10"))
     main(total_records=total, batch_size=batch)
