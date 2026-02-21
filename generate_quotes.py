@@ -29,7 +29,7 @@ def generate_quote():
 
     return {
         "uuid": str(uuid.uuid4()),
-        "customer": str(uuid.uuid4()),
+        "customer_uuid": str(uuid.uuid4()),
 
         # Profile Data
         "first_name": fake.first_name(),
