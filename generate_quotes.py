@@ -65,6 +65,30 @@ def build_random_email() -> str:
     return f"{first}{sep}{last}{num}@{domain}"
 
 
+def get_next_quote_start() -> int:
+    """
+    Get the next quote sequence number from Supabase
+    by looking at the current max quote_id.
+    """
+    resp = (
+        supabase.table("quotes")
+        .select("quote_id")
+        .order("quote_id", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    rows = getattr(resp, "data", []) or []
+    if not rows:
+        return 1
+
+    last_id = rows[0]["quote_id"]  # e.g. "q_0000123"
+    try:
+        return int(last_id.split("_")[1]) + 1
+    except Exception:
+        return 1
+
+
 def generate_quote(i: int) -> dict:
     """Generate one quote row matching the public.quotes schema."""
     make = random.choice(list(CAR_DATA.keys()))
@@ -76,7 +100,7 @@ def generate_quote(i: int) -> dict:
         # Required IDs
         "uuid": str(uuid.uuid4()),                  # primary key
         "quote_id": f"q_{i:07d}",                   # unique text ID
-        "customer_uuid": str(customer_uuid),        # stable per customer
+        "customer_uuid": str(customer_uuid),        # customer identifier
 
         # Person & demographics
         "title": random.choice(["Mr", "Ms", "Mrs", "Dr"]),
@@ -135,9 +159,16 @@ def generate_quote(i: int) -> dict:
 
 
 def main(total_records: int = 10, batch_size: int = 10) -> None:
-    """Generate and insert synthetic quotes into Supabase."""
-    print(f"Generating {total_records} records...")
-    data = [generate_quote(i) for i in range(1, total_records + 1)]
+    """Generate and insert synthetic quotes into Supabase without duplicate quote_id."""
+    start_index = get_next_quote_start()
+    end_index = start_index + total_records - 1
+
+    print(
+        f"Generating {total_records} records from "
+        f"q_{start_index:07d} to q_{end_index:07d}..."
+    )
+
+    data = [generate_quote(i) for i in range(start_index, end_index + 1)]
 
     for i in range(0, len(data), batch_size):
         batch = data[i : i + batch_size]
