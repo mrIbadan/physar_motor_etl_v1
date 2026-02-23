@@ -1,5 +1,7 @@
+import os
+import uuid
 import random
-from datetime import date, timedelta
+from datetime import datetime, timedelta, date
 
 from supabase import create_client, Client
 
@@ -9,135 +11,131 @@ SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-CLAIM_TYPES = [
-    "Accidental damage",
-    "Third-party property",
-    "Bodily injury",
+CAUSES = [
+    "Accident - at fault",
+    "Accident - non-fault",
     "Theft",
     "Fire",
-    "Windscreen",
+    "Weather",
     "Vandalism",
 ]
-
-FAULT_TYPES = ["Fault", "Non-fault", "Split"]
+FAULT_OPTIONS = ["Fault", "Non-fault", "Split"]
+CLAIM_TYPES = ["Own damage", "TP property", "Injury", "Windscreen"]
+HANDLERS = ["Alex", "Jamie", "Taylor", "Jordan", "Morgan"]
 
 
 # ---------- 2. HELPERS ----------
-def get_next_claim_start() -> int:
-    """Get next claim sequence from claims.claim_reference."""
-    resp = (
-        supabase.table("claims")
-        .select("claim_reference")
-        .order("claim_reference", desc=True)
-        .limit(1)
-        .execute()
-    )
-    rows = getattr(resp, "data", []) or []
-    if not rows:
-        return 1
+def pick_random_policy() -> dict:
+    """
+    Pick a random recent policy from public.policies.
 
-    last_id = rows[0]["claim_reference"]  # e.g. "c_0000123"
-    try:
-        return int(last_id.split("_")[1]) + 1
-    except Exception:
-        return 1
-
-
-def pick_random_policy():
-    """Pick a random policy from policies table."""
+    Expects policies schema:
+      uuid (pk), policy_id, policy_start_date, policy_end_date.
+    """
     resp = (
         supabase.table("policies")
-        .select(
-            # ONLY columns that exist in policies
-            "uuid, customer_uuid, policy_id, policy_start_date, policy_end_date"
-        )
-        .limit(1000)
+        .select("uuid, policy_id, policy_start_date, policy_end_date")
+        .order("created_at", desc=True)
+        .limit(100)
         .execute()
     )
-    rows = getattr(resp, "data", []) or []
-    if not rows:
-        return None
-    return random.choice(rows)
+    policies = getattr(resp, "data", []) or []
+    if not policies:
+        raise RuntimeError("No policies found to attach claims to")
+    return random.choice(policies)
 
 
-def sample_claim_amount(claim_type: str) -> float:
-    """Sample a rough incurred amount based on type (no premium dependency)."""
-    if claim_type == "Windscreen":
-        return round(random.uniform(100, 400), 2)
-    if claim_type in ("Theft", "Fire"):
-        return round(random.uniform(500, 5000), 2)
-    if claim_type == "Bodily injury":
-        return round(random.uniform(1000, 15000), 2)
-    # Accidental damage, TP property, Vandalism
-    return round(random.uniform(300, 8000), 2)
-
-
-def build_one_claim():
+def build_one_claim() -> dict:
+    """
+    Build a single synthetic claim linked to a policy by policy_id.
+    Matches public.claims schema above.
+    """
     policy = pick_random_policy()
-    if not policy:
-        print("No policies found; cannot create claim.")
-        return None
-
-    claim_index = get_next_claim_start()
-    claim_ref = f"c_{claim_index:07d}"
-
-    claim_type = random.choice(CLAIM_TYPES)
-    fault = random.choices(FAULT_TYPES, weights=[0.6, 0.3, 0.1])[0]
 
     start = date.fromisoformat(policy["policy_start_date"])
     end = date.fromisoformat(policy["policy_end_date"])
-    duration_days = (end - start).days or 1
+    days_span = (end - start).days or 1
+    loss_date = start + timedelta(days=random.randint(0, days_span))
+    report_date = loss_date + timedelta(days=random.randint(0, 14))
 
-    loss_date = start + timedelta(days=random.randint(0, duration_days - 1))
-    reported_date = loss_date + timedelta(days=random.randint(0, 14))
-
-    incurred = sample_claim_amount(claim_type)
+    # Sample incurred based on claim type (no premium dependency)
+    claim_type = random.choice(CLAIM_TYPES)
+    if claim_type == "Windscreen":
+        incurred = round(random.uniform(100, 400), 2)
+    elif claim_type in ("Theft", "Fire"):
+        incurred = round(random.uniform(500, 5000), 2)
+    elif claim_type == "Injury":
+        incurred = round(random.uniform(1000, 15000), 2)
+    else:
+        incurred = round(random.uniform(300, 8000), 2)
 
     # Simple paid vs outstanding split
     if random.random() < 0.5:
         paid = incurred
         outstanding = 0.0
-        status = "Closed"
-        settlement_date = reported_date + timedelta(days=random.randint(1, 60))
+        claim_status = "Closed"
+        settlement_date = report_date + timedelta(days=random.randint(1, 60))
     else:
         paid = round(incurred * random.uniform(0.0, 0.7), 2)
         outstanding = round(incurred - paid, 2)
-        status = "Open"
+        claim_status = "Open"
         settlement_date = None
 
+    claim_seq = random.randint(1_000_000, 9_999_999)
+
     return {
-        # link to policies.uuid (PK)
-        "policy_uuid": policy["uuid"],
-        "customer_uuid": policy["customer_uuid"],
+        "uuid": str(uuid.uuid4()),
+        "claim_id": f"c_{claim_seq:07d}",
+
+        # FK to policies.policy_id
         "policy_id": policy["policy_id"],
-        "claim_reference": claim_ref,
-        "insurer_claim_number": None,
-        "claim_type": claim_type,
-        "fault": fault,
-        "claim_description": f"Synthetic {claim_type} claim ({fault})",
+
         "loss_date": loss_date.isoformat(),
-        "reported_date": reported_date.isoformat(),
-        "settlement_date": settlement_date.isoformat() if settlement_date else None,
+        "report_date": report_date.isoformat(),
+        "claim_status": claim_status,
+        "cause_of_loss": random.choice(CAUSES),
+        "fault": random.choice(FAULT_OPTIONS),
+        "claim_type": claim_type,
+        "description": f"Synthetic {claim_type} claim",
+
         "incurred_amount": incurred,
         "paid_amount": paid,
         "outstanding_amount": outstanding,
-        "status": status,
+
+        "handler_name": random.choice(HANDLERS),
+        "settlement_date": (
+            settlement_date.isoformat() if settlement_date else None
+        ),
+
+        "created_at": datetime.utcnow().isoformat(),
     }
 
 
 # ---------- 3. ENTRY POINT ----------
-def main():
-    claim = build_one_claim()
-    if not claim:
+def main(total_claims: int = 5) -> None:
+    claims: list[dict] = []
+    for _ in range(total_claims):
+        try:
+            claims.append(build_one_claim())
+        except RuntimeError as e:
+            print(f"⚠️ Skipping claim build: {e}")
+            break
+
+    if not claims:
+        print("No claims to insert.")
         return
 
-    print(f"Inserting claim {claim['claim_reference']} for policy {claim['policy_id']}...")
+    print(f"Inserting {len(claims)} claims...")
     try:
-        supabase.table("claims").insert(claim).execute()
-        print("✅ Claim inserted.")
+        resp = supabase.table("claims").insert(claims).execute()
+        print(
+            f"✅ Inserted {len(claims)} claims "
+            f"(status: {getattr(resp, 'status_code', 'unknown')})"
+        )
     except Exception as e:
-        print(f"❌ Failed to insert claim: {e}")
+        print(f"❌ Failed to insert claims: {e}")
 
 
 if __name__ == "__main__":
-    main()
+    total = int(os.getenv("TOTAL_CLAIMS", "5"))
+    main(total_claims=total)
