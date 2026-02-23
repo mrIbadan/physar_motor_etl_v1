@@ -48,7 +48,8 @@ def pick_random_policy():
     resp = (
         supabase.table("policies")
         .select(
-            "policy_uuid, customer_uuid, quote_uuid, policy_id, "
+            # FIX: use uuid (actual PK), not policy_uuid
+            "uuid, customer_uuid, quote_uuid, policy_id, "
             "policy_start_date, policy_end_date, current_premium"
         )
         .limit(1000)
@@ -107,7 +108,9 @@ def build_one_claim():
         settlement_date = None
 
     return {
-        "policy_uuid": policy["policy_uuid"],
+        # FIX: store policies.uuid here (column in policies table),
+        # your claims table needs to have a matching FK column name
+        "policy_uuid": policy["uuid"],
         "customer_uuid": policy["customer_uuid"],
         "quote_uuid": policy.get("quote_uuid"),
         "policy_id": policy["policy_id"],
