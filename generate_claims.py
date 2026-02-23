@@ -48,9 +48,8 @@ def pick_random_policy():
     resp = (
         supabase.table("policies")
         .select(
-            # IMPORTANT: only columns that actually exist in policies
-            "uuid, customer_uuid, policy_id, "
-            "policy_start_date, policy_end_date, current_premium"
+            # ONLY columns that exist in policies
+            "uuid, customer_uuid, policy_id, policy_start_date, policy_end_date"
         )
         .limit(1000)
         .execute()
@@ -61,16 +60,16 @@ def pick_random_policy():
     return random.choice(rows)
 
 
-def sample_claim_amount(claim_type: str, premium: float) -> float:
-    """Sample a rough incurred amount based on type and premium."""
+def sample_claim_amount(claim_type: str) -> float:
+    """Sample a rough incurred amount based on type (no premium dependency)."""
     if claim_type == "Windscreen":
         return round(random.uniform(100, 400), 2)
     if claim_type in ("Theft", "Fire"):
-        return round(random.uniform(0.5, 2.0) * premium, 2)
+        return round(random.uniform(500, 5000), 2)
     if claim_type == "Bodily injury":
-        return round(random.uniform(0.5, 3.0) * premium, 2)
+        return round(random.uniform(1000, 15000), 2)
     # Accidental damage, TP property, Vandalism
-    return round(random.uniform(0.2, 1.5) * premium, 2)
+    return round(random.uniform(300, 8000), 2)
 
 
 def build_one_claim():
@@ -92,8 +91,7 @@ def build_one_claim():
     loss_date = start + timedelta(days=random.randint(0, duration_days - 1))
     reported_date = loss_date + timedelta(days=random.randint(0, 14))
 
-    premium = float(policy["current_premium"])
-    incurred = sample_claim_amount(claim_type, premium)
+    incurred = sample_claim_amount(claim_type)
 
     # Simple paid vs outstanding split
     if random.random() < 0.5:
@@ -108,7 +106,7 @@ def build_one_claim():
         settlement_date = None
 
     return {
-        # link to policies.uuid (actual PK)
+        # link to policies.uuid (PK)
         "policy_uuid": policy["uuid"],
         "customer_uuid": policy["customer_uuid"],
         "policy_id": policy["policy_id"],
