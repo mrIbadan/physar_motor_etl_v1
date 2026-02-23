@@ -87,7 +87,7 @@ def generate_quote(i: int) -> dict:
     customer_uuid = uuid.uuid4()
 
     return {
-        "quote_uuid": str(uuid.uuid4()),
+        "uuid": str(uuid.uuid4()),
         "quote_id": f"q_{i:07d}",
         "customer_uuid": str(customer_uuid),
 
