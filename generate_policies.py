@@ -1,4 +1,5 @@
 import os
+import uuid
 import random
 from datetime import date
 from dateutil.relativedelta import relativedelta  # pip install python-dateutil
@@ -45,12 +46,13 @@ def fetch_unique_customers():
 
 
 def fetch_quote_for_customer(customer_uuid: str):
-    """Pick one quote for the customer (e.g. latest created_at)."""
+    """Pick the latest quote for the customer."""
     resp = (
         supabase.table("quotes")
         .select(
             "uuid, quote_id, customer_uuid, start_date, "
-            "quoted_total_premium, payment_frequency"
+            "quoted_total_premium, payment_frequency, "
+            "cover_type, vehicle_usage, car_make, car_model, abi_group"
         )
         .eq("customer_uuid", customer_uuid)
         .order("created_at", desc=True)
@@ -93,21 +95,29 @@ def build_policy_rows(conversion_rate: float = 0.10):
         start_date = date.fromisoformat(start_date_str)
         end_date = start_date + relativedelta(years=1)
 
-        premium = float(quote["quoted_total_premium"])
+        gwp = float(quote["quoted_total_premium"])
+        commission = round(gwp * 0.15, 2)
+        ipt = round(gwp * 0.12, 2)
+        total = round(gwp + ipt, 2)
 
         policy = {
-            "customer_uuid": quote["customer_uuid"],
-            "quote_uuid": quote["uuid"],
-            "quote_id": quote["quote_id"],
+            # PK generated in DB (uuid default), we don't send it
             "policy_id": f"p_{current_index:07d}",
+            "quote_id": quote["quote_id"],
+            "customer_uuid": quote["customer_uuid"],
             "policy_start_date": start_date.isoformat(),
             "policy_end_date": end_date.isoformat(),
-            "status": "Active",
-            "written_premium": premium,
-            "current_premium": premium,
-            "currency": "GBP",
+            "cover_type": quote.get("cover_type"),
             "payment_frequency": quote.get("payment_frequency"),
-            "payment_method": "Card",  # demo default
+            "vehicle_usage": quote.get("vehicle_usage"),
+            "car_make": quote.get("car_make"),
+            "car_model": quote.get("car_model"),
+            "abi_group": quote.get("abi_group"),
+            "gross_written_premium": gwp,
+            "commission_amount": commission,
+            "ipt_amount": ipt,
+            "total_payable": total,
+            "status": "Active",
         }
         policies.append(policy)
         current_index += 1
