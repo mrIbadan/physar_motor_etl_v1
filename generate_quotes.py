@@ -28,7 +28,10 @@ CAR_DATA = {
 }
 
 COVER_TYPES = ["Comprehensive", "Third Party", "Third Party, Fire and Theft"]
-SEX_OPTIONS = [True, False]
+
+# SEX AS TEXT, NOT BOOLEAN
+SEX_OPTIONS = ["Male", "Female"]  # extend if you want: "Other", "Prefer not to say"
+
 MARITAL_STATUS = ["Single", "Married", "Divorced", "Widowed"]
 NATIONALITIES = ["UK", "EU", "Other"]
 EMPLOYMENT_STATUS = ["Employed", "Self-Employed", "Student", "Retired", "Unemployed"]
@@ -110,7 +113,7 @@ def generate_quote(i: int) -> dict:
         "date_of_birth": fake.date_of_birth(
             minimum_age=18, maximum_age=75
         ).isoformat(),
-        "sex": random.choice(SEX_OPTIONS),
+        "sex": random.choice(SEX_OPTIONS),          # TEXT, not boolean
         "nationality": random.choice(NATIONALITIES),
         "marital_status": random.choice(MARITAL_STATUS),
         "employment_status": random.choice(EMPLOYMENT_STATUS),
@@ -171,7 +174,7 @@ def main(total_records: int = 10, batch_size: int = 10) -> None:
     data = [generate_quote(i) for i in range(start_index, end_index + 1)]
 
     for i in range(0, len(data), batch_size):
-        batch = data[i : i + batch_size]
+        batch = data[i: i + batch_size]
         try:
             response = supabase.table("quotes").insert(batch).execute()
             print(
@@ -183,6 +186,8 @@ def main(total_records: int = 10, batch_size: int = 10) -> None:
 
 
 if __name__ == "__main__":
+    # For “1 quote every 30 seconds from 6am to 6pm” using GitHub Actions every 5 minutes:
+    # TOTAL_RECORDS default 10 → 10 quotes per 5-min run ≈ 1 every 30s.
     total = int(os.getenv("TOTAL_RECORDS", "10"))
     batch = int(os.getenv("BATCH_SIZE", "10"))
     main(total_records=total, batch_size=batch)
