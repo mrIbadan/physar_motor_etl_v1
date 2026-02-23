@@ -6,13 +6,11 @@ from datetime import datetime, date, timedelta
 from faker import Faker
 from supabase import create_client, Client
 
-# ---------- 1. CONNECTION (hardcoded for now) ----------
 SUPABASE_URL = "https://jxonjddldsakvxqklaqd.supabase.co"
 SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ---------- 2. DATA GENERATION SETUP ----------
 fake = Faker("en_GB")
 
 CAR_DATA = {
@@ -28,10 +26,7 @@ CAR_DATA = {
 }
 
 COVER_TYPES = ["Comprehensive", "Third Party", "Third Party, Fire and Theft"]
-
-# sex as TEXT, not boolean
-SEX_OPTIONS = ["Male", "Female"]  # add "Other", "Prefer not to say" if you like
-
+SEX_OPTIONS = ["Male", "Female"]
 MARITAL_STATUS = ["Single", "Married", "Divorced", "Widowed"]
 NATIONALITIES = ["UK", "EU", "Other"]
 EMPLOYMENT_STATUS = ["Employed", "Self-Employed", "Student", "Retired", "Unemployed"]
@@ -53,13 +48,11 @@ EMAIL_DOMAINS = [
 
 
 def random_start_date() -> str:
-    """Start date within ±30 days of today, as ISO string."""
     offset = random.randint(-30, 30)
     return (date.today() + timedelta(days=offset)).isoformat()
 
 
 def build_random_email() -> str:
-    """Create a fake email on made-up domains (never null)."""
     first = fake.first_name().lower()
     last = fake.last_name().lower()
     num = random.randint(1, 9999)
@@ -69,10 +62,6 @@ def build_random_email() -> str:
 
 
 def get_next_quote_start() -> int:
-    """
-    Get the next quote sequence number from Supabase
-    by looking at the current max quote_id.
-    """
     resp = (
         supabase.table("quotes")
         .select("quote_id")
@@ -80,7 +69,6 @@ def get_next_quote_start() -> int:
         .limit(1)
         .execute()
     )
-
     rows = getattr(resp, "data", []) or []
     if not rows:
         return 1
@@ -93,19 +81,16 @@ def get_next_quote_start() -> int:
 
 
 def generate_quote(i: int) -> dict:
-    """Generate one quote row matching the public.quotes schema."""
     make = random.choice(list(CAR_DATA.keys()))
     model = random.choice(CAR_DATA[make])
 
     customer_uuid = uuid.uuid4()
 
     return {
-        # Required IDs
-        "uuid": str(uuid.uuid4()),                  # primary key
-        "quote_id": f"q_{i:07d}",                   # unique text ID
-        "customer_uuid": str(customer_uuid),        # customer identifier
+        "quote_uuid": str(uuid.uuid4()),
+        "quote_id": f"q_{i:07d}",
+        "customer_uuid": str(customer_uuid),
 
-        # Person & demographics
         "title": random.choice(["Mr", "Ms", "Mrs", "Dr"]),
         "first_name": fake.first_name(),
         "last_name": fake.last_name(),
@@ -113,14 +98,13 @@ def generate_quote(i: int) -> dict:
         "date_of_birth": fake.date_of_birth(
             minimum_age=18, maximum_age=75
         ).isoformat(),
-        "sex": random.choice(SEX_OPTIONS),          # TEXT
+        "sex": random.choice(SEX_OPTIONS),
         "nationality": random.choice(NATIONALITIES),
         "marital_status": random.choice(MARITAL_STATUS),
         "employment_status": random.choice(EMPLOYMENT_STATUS),
         "job_title": fake.job(),
         "occupation": fake.job(),
 
-        # Vehicle & usage
         "car_make": make,
         "car_model": model,
         "abi_group": random.randint(1, 50),
@@ -128,11 +112,10 @@ def generate_quote(i: int) -> dict:
         "vehicle_usage": random.choice(VEHICLE_USAGE),
         "parking": random.choice(PARKING_OPTIONS),
 
-        # Driving & risk
         "driving_licence_type": random.choice(LICENCE_TYPES),
         "driving_licence_years": random.randint(1, 57),
         "licence_issue_country": "UK",
-        "number_of_ncd_years": random.choice([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        "number_of_ncd_years": random.choice(list(range(10))),
         "number_of_past_claims": random.choices(
             [0, 1, 2, 3], weights=[75, 15, 7, 3]
         )[0],
@@ -143,7 +126,6 @@ def generate_quote(i: int) -> dict:
             [None, "None", "Diabetes", "Heart condition", "Epilepsy"]
         ),
 
-        # Cover & pricing
         "cover_type": random.choice(COVER_TYPES),
         "start_date": random_start_date(),
         "estimated_annual_mileage": random.randint(3000, 20000),
@@ -155,38 +137,35 @@ def generate_quote(i: int) -> dict:
             round(random.uniform(350.00, 2500.00), 2)
         ),
 
-        # Status & audit
         "status": "Quoted",
-        "created_at": datetime.utcnow().isoformat(),  # timestamptz-compatible
+        "created_at": datetime.utcnow().isoformat(),
     }
 
 
 def main(total_records: int = 10, batch_size: int = 10) -> None:
-    """Generate and insert synthetic quotes into Supabase without duplicate quote_id."""
     start_index = get_next_quote_start()
     end_index = start_index + total_records - 1
 
     print(
-        f"Generating {total_records} records from "
+        f"Generating {total_records} quotes from "
         f"q_{start_index:07d} to q_{end_index:07d}..."
     )
 
     data = [generate_quote(i) for i in range(start_index, end_index + 1)]
 
     for i in range(0, len(data), batch_size):
-        batch = data[i: i + batch_size]
+        batch = data[i : i + batch_size]
         try:
-            response = supabase.table("quotes").insert(batch).execute()
+            resp = supabase.table("quotes").insert(batch).execute()
             print(
-                f"✅ Successfully ingested batch: {i} to {i + len(batch)} "
-                f"(status: {getattr(response, 'status_code', 'unknown')})"
+                f"✅ Quotes batch {i}–{i + len(batch) - 1} "
+                f"(status: {getattr(resp, 'status_code', 'unknown')})"
             )
         except Exception as e:
-            print(f"❌ Batch failed at index {i}: {e}")
+            print(f"❌ Quotes batch failed at index {i}: {e}")
 
 
 if __name__ == "__main__":
-    # 10 quotes per 5‑minute run ≈ 1 every 30 seconds
     total = int(os.getenv("TOTAL_RECORDS", "10"))
     batch = int(os.getenv("BATCH_SIZE", "10"))
     main(total_records=total, batch_size=batch)
