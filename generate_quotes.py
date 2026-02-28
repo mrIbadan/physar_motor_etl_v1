@@ -10,15 +10,15 @@ SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 fake = Faker("en_GB")
 
-# ... [CAR_DATA, COVER_TYPES, etc. dictionaries remain the same] ...
+# ... (Keep your CAR_DATA and other constants here) ...
 
 def generate_quote(i: int) -> dict:
     make = random.choice(list(CAR_DATA.keys()))
     model = random.choice(CAR_DATA[make])
     
-    # Realistic UK Credit Score (300-900)
+    # Generate credit score (300-900)
     credit_score = random.choices(
-        [random.randint(300, 550), random.randint(551, 750), random.randint(751, 900)],
+        [random.randint(300, 500), random.randint(501, 750), random.randint(751, 900)],
         weights=[15, 65, 20]
     )[0]
 
@@ -26,7 +26,6 @@ def generate_quote(i: int) -> dict:
         "uuid": str(uuid.uuid4()),
         "quote_id": f"q_{i:07d}",
         "customer_uuid": str(uuid.uuid4()),
-        "title": random.choice(["Mr", "Ms", "Mrs", "Dr"]),
         "first_name": fake.first_name(),
         "last_name": fake.last_name(),
         "email_address": f"{fake.first_name().lower()}@{random.choice(['testmail.com', 'demo.io'])}",
@@ -36,10 +35,9 @@ def generate_quote(i: int) -> dict:
         "credit_score": credit_score,
         "number_of_ccjs": random.choices([0, 1, 2], weights=[92, 6, 2])[0],
         "quoted_total_premium": float(round(random.uniform(350.00, 2500.00), 2)),
-        "status": "Quoted",
-        "start_date": (date.today() + timedelta(days=random.randint(-30, 30))).isoformat(),
+        "status": "Quoted",  # Always starts as Quoted
+        "start_date": (date.today() + timedelta(days=random.randint(1, 30))).isoformat(),
         "created_at": datetime.utcnow().isoformat(),
-        # ... [Include other fields like transmission, usage, etc. as per your original script]
     }
 
 def get_next_quote_start() -> int:
@@ -49,12 +47,11 @@ def get_next_quote_start() -> int:
     try: return int(rows[0]["quote_id"].split("_")[1]) + 1
     except: return 1
 
-def main(total_records: int = 10, batch_size: int = 10) -> None:
-    start_index = get_next_quote_start()
-    data = [generate_quote(i) for i in range(start_index, start_index + total_records)]
-    for i in range(0, len(data), batch_size):
-        supabase.table("quotes").insert(data[i : i + batch_size]).execute()
-    print(f"✅ Generated {total_records} quotes.")
+def main():
+    start_idx = get_next_quote_start()
+    data = [generate_quote(i) for i in range(start_idx, start_idx + 10)]
+    supabase.table("quotes").insert(data).execute()
+    print(f"✅ Generated 10 quotes starting at q_{start_idx:07d}")
 
 if __name__ == "__main__":
-    main(total=10)
+    main()
