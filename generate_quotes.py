@@ -50,6 +50,9 @@ EMAIL_DOMAINS = [
 # ---------- 3. HELPERS ----------
 
 def get_next_quote_start() -> int:
+    """
+    Continue quote_id from the highest existing q_XXXXXXX.
+    """
     try:
         resp = (
             supabase.table("quotes")
@@ -61,7 +64,8 @@ def get_next_quote_start() -> int:
         rows = getattr(resp, "data", []) or []
         if not rows:
             return 1
-        return int(rows[0]["quote_id"].split("_")[1]) + 1
+        last_id = rows[0]["quote_id"]  # e.g. "q_0000123"
+        return int(last_id.split("_")[1]) + 1
     except Exception:
         return 1
 
