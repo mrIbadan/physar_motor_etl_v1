@@ -10,8 +10,15 @@ SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ---------- 2. CONSTANTS ----------
 
-# ---------- 2. HELPERS ----------
+REJECTION_REASONS = [
+    "User Cancelled / Did not accept",
+    "User Declined due to UW rules",
+]
+
+
+# ---------- 3. HELPERS ----------
 
 def get_next_policy_start() -> int:
     """
@@ -39,14 +46,13 @@ def get_next_policy_start() -> int:
 def fetch_unconverted_quotes():
     """
     Return only quotes that do NOT already have a policy.
-    Checks the policies table directly so a quote is never converted twice.
+    Checks the policies table directly so a quote is never converted twice,
+    even if the job reruns or overlaps.
     """
     # Step 1: get all quote_ids already converted to a policy
     resp = supabase.table("policies").select("quote_id").execute()
     already_converted = set(
-        row["quote_id"]
-        for row in (getattr(resp, "data", []) or [])
-        if row.get("quote_id")
+        row["quote_id"] for row in (getattr(resp, "data", []) or []) if row.get("quote_id")
     )
 
     # Step 2: get all quotes needed for policy creation
@@ -57,6 +63,7 @@ def fetch_unconverted_quotes():
             "quoted_total_premium, payment_frequency, "
             "cover_type, vehicle_usage, car_make, car_model, abi_group"
         )
+        .eq("status", "Quoted")
         .execute()
     )
     all_quotes = getattr(resp, "data", []) or []
@@ -65,7 +72,33 @@ def fetch_unconverted_quotes():
     return [q for q in all_quotes if q["quote_id"] not in already_converted]
 
 
-# ---------- 3. CORE LOGIC ----------
+def mark_rejected_quotes(converted_quote_ids: set[str]):
+    """
+    For quotes that did NOT convert in this run, set status and rejection_reason.
+    Only touches rows currently in status 'Quoted'.
+    """
+    # Fetch all currently quoted quotes
+    resp = (
+        supabase.table("quotes")
+        .select("quote_id")
+        .eq("status", "Quoted")
+        .execute()
+    )
+    rows = getattr(resp, "data", []) or []
+    if not rows:
+        return
+
+    for r in rows:
+        qid = r["quote_id"]
+        if qid in converted_quote_ids:
+            continue
+        supabase.table("quotes").update({
+            "status": "Rejected",
+            "rejection_reason": random.choice(REJECTION_REASONS),
+        }).eq("quote_id", qid).execute()
+
+
+# ---------- 4. CORE LOGIC ----------
 
 def build_policy_rows(conversion_rate: float = 0.10):
     """
@@ -89,7 +122,7 @@ def build_policy_rows(conversion_rate: float = 0.10):
 
         start_date_str = quote.get("start_date")
         if not start_date_str:
-            # Skip quotes without a start date
+            # Skip badly formed quotes
             continue
 
         start_date = date.fromisoformat(start_date_str)
@@ -109,11 +142,11 @@ def build_policy_rows(conversion_rate: float = 0.10):
         abi_group = quote.get("abi_group") or 1
 
         policy = {
-            "policy_id": f"p_{current_index:07d}",           # required, unique
-            "quote_id": quote["quote_id"],                   # FK to quotes.quote_id
-            "customer_uuid": quote["customer_uuid"],         # same customer as quote
-            "policy_start_date": start_date.isoformat(),     # required
-            "policy_end_date": end_date.isoformat(),         # required
+            "policy_id": f"p_{current_index:07d}",
+            "quote_id": quote["quote_id"],
+            "customer_uuid": quote["customer_uuid"],
+            "policy_start_date": start_date.isoformat(),
+            "policy_end_date": end_date.isoformat(),
             "cover_type": cover_type,
             "payment_frequency": payment_frequency,
             "vehicle_usage": vehicle_usage,
@@ -132,7 +165,7 @@ def build_policy_rows(conversion_rate: float = 0.10):
     return policies
 
 
-# ---------- 4. ENTRY POINT ----------
+# ---------- 5. ENTRY POINT ----------
 
 def main():
     CONVERSION_RATE = 0.10  # 10% quote-to-policy
@@ -145,8 +178,14 @@ def main():
 
     print(f"Converting {len(policies)} policies...")
     try:
+        # Insert policies
         supabase.table("policies").insert(policies).execute()
         print("✅ Success: New policies added.")
+
+        # Mark non-converted quotes as rejected
+        converted_quote_ids = {p["quote_id"] for p in policies}
+        mark_rejected_quotes(converted_quote_ids)
+
     except Exception as e:
         print(f"❌ Database Error: {e}")
 
