@@ -5,13 +5,13 @@ from datetime import datetime, date, timedelta
 from faker import Faker
 from supabase import create_client, Client
 
-# ---------- 1. CONFIG & CONNECTION ----------
+# ---------- 1. CONNECTION ----------
 SUPABASE_URL = "https://jxonjddldsakvxqklaqd.supabase.co"
 SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 fake = Faker("en_GB")
 
-# ---------- 2. CONSTANTS (The Missing Data) ----------
+# ---------- 2. CONSTANTS & DICTIONARIES ----------
 CAR_DATA = {
     "Ford": ["Fiesta", "Focus", "Puma", "Kuga"],
     "Tesla": ["Model 3", "Model Y", "Model S", "Model X"],
@@ -44,6 +44,7 @@ def generate_quote(i: int) -> dict:
     model = random.choice(CAR_DATA[make])
     
     # Generate credit score (300-900)
+    # 15% High Risk, 65% Standard, 20% Prime
     credit_score = random.choices(
         [random.randint(300, 500), random.randint(501, 750), random.randint(751, 900)],
         weights=[15, 65, 20]
@@ -62,7 +63,7 @@ def generate_quote(i: int) -> dict:
         "credit_score": credit_score,
         "number_of_ccjs": random.choices([0, 1, 2], weights=[92, 6, 2])[0],
         "quoted_total_premium": float(round(random.uniform(350.00, 2500.00), 2)),
-        "status": "Quoted",
+        "status": "Quoted", # Status starts here
         "cover_type": random.choice(COVER_TYPES),
         "vehicle_usage": random.choice(VEHICLE_USAGE),
         "payment_frequency": random.choice(PAYMENT_FREQUENCY),
@@ -70,18 +71,18 @@ def generate_quote(i: int) -> dict:
         "created_at": datetime.utcnow().isoformat(),
     }
 
-# ---------- 4. EXECUTION ----------
+# ---------- 4. MAIN EXECUTION ----------
 
 def main():
     start_idx = get_next_quote_start()
-    # Generate 10 new quotes
+    # Create a batch of 10 quotes
     data = [generate_quote(i) for i in range(start_idx, start_idx + 10)]
     
     try:
         supabase.table("quotes").insert(data).execute()
-        print(f"✅ Successfully generated 10 quotes (q_{start_idx:07d} to q_{start_idx+9:07d})")
+        print(f"✅ Successfully generated quotes q_{start_idx:07d} to q_{start_idx+9:07d}")
     except Exception as e:
-        print(f"❌ Error inserting quotes: {e}")
+        print(f"❌ Database Insert Error: {e}")
 
 if __name__ == "__main__":
     main()
