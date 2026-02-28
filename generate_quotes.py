@@ -2,170 +2,59 @@ import os
 import uuid
 import random
 from datetime import datetime, date, timedelta
-
 from faker import Faker
 from supabase import create_client, Client
 
 SUPABASE_URL = "https://jxonjddldsakvxqklaqd.supabase.co"
 SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
-
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 fake = Faker("en_GB")
 
-CAR_DATA = {
-    "Ford": ["Fiesta", "Focus", "Puma", "Kuga"],
-    "Tesla": ["Model 3", "Model Y", "Model S", "Model X"],
-    "BMW": ["1 Series", "3 Series", "5 Series", "X1", "X3", "X5"],
-    "Volkswagen": ["Golf", "Polo", "ID.3", "Passat", "Tiguan"],
-    "Audi": ["A1", "A3", "A4", "A5", "Q3", "Q5"],
-    "Mercedes-Benz": ["A-Class", "C-Class", "E-Class", "GLA", "GLC"],
-    "Nissan": ["Micra", "Qashqai", "Juke"],
-    "Toyota": ["Yaris", "Corolla", "RAV4"],
-    "Vauxhall": ["Corsa", "Astra", "Insignia"],
-}
-
-COVER_TYPES = ["Comprehensive", "Third Party", "Third Party, Fire and Theft"]
-SEX_OPTIONS = ["Male", "Female"]
-MARITAL_STATUS = ["Single", "Married", "Divorced", "Widowed"]
-NATIONALITIES = ["UK", "EU", "Other"]
-EMPLOYMENT_STATUS = ["Employed", "Self-Employed", "Student", "Retired", "Unemployed"]
-VEHICLE_USAGE = ["Social, domestic & pleasure", "SDP + commuting", "Business use"]
-PARKING_OPTIONS = ["Garage", "Driveway", "On street", "Car park"]
-LICENCE_TYPES = ["Full UK", "Provisional", "EU", "International"]
-PAYMENT_FREQUENCY = ["Annual", "Monthly"]
-TRANSMISSION = ["Manual", "Automatic"]
-
-EMAIL_DOMAINS = [
-    "youmail.com",
-    "randommail.com",
-    "testmail.net",
-    "demoemail.org",
-    "maildemo.io",
-    "sampleinbox.co",
-    "fakedomain.test",
-]
-
-
-def random_start_date() -> str:
-    offset = random.randint(-30, 30)
-    return (date.today() + timedelta(days=offset)).isoformat()
-
-
-def build_random_email() -> str:
-    first = fake.first_name().lower()
-    last = fake.last_name().lower()
-    num = random.randint(1, 9999)
-    sep = random.choice([".", "_", ""])
-    domain = random.choice(EMAIL_DOMAINS)
-    return f"{first}{sep}{last}{num}@{domain}"
-
-
-def get_next_quote_start() -> int:
-    resp = (
-        supabase.table("quotes")
-        .select("quote_id")
-        .order("quote_id", desc=True)
-        .limit(1)
-        .execute()
-    )
-    rows = getattr(resp, "data", []) or []
-    if not rows:
-        return 1
-
-    last_id = rows[0]["quote_id"]  # e.g. "q_0000123"
-    try:
-        return int(last_id.split("_")[1]) + 1
-    except Exception:
-        return 1
-
+# ... [CAR_DATA, COVER_TYPES, etc. dictionaries remain the same] ...
 
 def generate_quote(i: int) -> dict:
     make = random.choice(list(CAR_DATA.keys()))
     model = random.choice(CAR_DATA[make])
-
-    customer_uuid = uuid.uuid4()
+    
+    # Realistic UK Credit Score (300-900)
+    credit_score = random.choices(
+        [random.randint(300, 550), random.randint(551, 750), random.randint(751, 900)],
+        weights=[15, 65, 20]
+    )[0]
 
     return {
         "uuid": str(uuid.uuid4()),
         "quote_id": f"q_{i:07d}",
-        "customer_uuid": str(customer_uuid),
-
+        "customer_uuid": str(uuid.uuid4()),
         "title": random.choice(["Mr", "Ms", "Mrs", "Dr"]),
         "first_name": fake.first_name(),
         "last_name": fake.last_name(),
-        "email_address": build_random_email(),
-        "date_of_birth": fake.date_of_birth(
-            minimum_age=18, maximum_age=75
-        ).isoformat(),
-        "sex": random.choice(SEX_OPTIONS),
-        "nationality": random.choice(NATIONALITIES),
-        "marital_status": random.choice(MARITAL_STATUS),
-        "employment_status": random.choice(EMPLOYMENT_STATUS),
-        "job_title": fake.job(),
-        "occupation": fake.job(),
-
+        "email_address": f"{fake.first_name().lower()}@{random.choice(['testmail.com', 'demo.io'])}",
+        "date_of_birth": fake.date_of_birth(minimum_age=18, maximum_age=75).isoformat(),
         "car_make": make,
         "car_model": model,
-        "abi_group": random.randint(1, 50),
-        "transmission": random.choice(TRANSMISSION),
-        "vehicle_usage": random.choice(VEHICLE_USAGE),
-        "parking": random.choice(PARKING_OPTIONS),
-
-        "driving_licence_type": random.choice(LICENCE_TYPES),
-        "driving_licence_years": random.randint(1, 57),
-        "licence_issue_country": "UK",
-        "number_of_ncd_years": random.choice(list(range(10))),
-        "number_of_past_claims": random.choices(
-            [0, 1, 2, 3], weights=[75, 15, 7, 3]
-        )[0],
-        "number_of_ccjs": random.choices(
-            [0, 1, 2], weights=[92, 6, 2]
-        )[0],
-        "medical_conditions": random.choice(
-            [None, "None", "Diabetes", "Heart condition", "Epilepsy"]
-        ),
-
-        "cover_type": random.choice(COVER_TYPES),
-        "start_date": random_start_date(),
-        "estimated_annual_mileage": random.randint(3000, 20000),
-        "payment_frequency": random.choice(PAYMENT_FREQUENCY),
-        "personal_injury_cover": random.choice([True, False]),
-        "breakdown_cover": random.choice([True, False]),
-        "courtesy_car": random.choice([True, False]),
-        "quoted_total_premium": float(
-            round(random.uniform(350.00, 2500.00), 2)
-        ),
-
+        "credit_score": credit_score,
+        "number_of_ccjs": random.choices([0, 1, 2], weights=[92, 6, 2])[0],
+        "quoted_total_premium": float(round(random.uniform(350.00, 2500.00), 2)),
         "status": "Quoted",
+        "start_date": (date.today() + timedelta(days=random.randint(-30, 30))).isoformat(),
         "created_at": datetime.utcnow().isoformat(),
+        # ... [Include other fields like transmission, usage, etc. as per your original script]
     }
 
+def get_next_quote_start() -> int:
+    resp = supabase.table("quotes").select("quote_id").order("quote_id", desc=True).limit(1).execute()
+    rows = getattr(resp, "data", []) or []
+    if not rows: return 1
+    try: return int(rows[0]["quote_id"].split("_")[1]) + 1
+    except: return 1
 
 def main(total_records: int = 10, batch_size: int = 10) -> None:
     start_index = get_next_quote_start()
-    end_index = start_index + total_records - 1
-
-    print(
-        f"Generating {total_records} quotes from "
-        f"q_{start_index:07d} to q_{end_index:07d}..."
-    )
-
-    data = [generate_quote(i) for i in range(start_index, end_index + 1)]
-
+    data = [generate_quote(i) for i in range(start_index, start_index + total_records)]
     for i in range(0, len(data), batch_size):
-        batch = data[i : i + batch_size]
-        try:
-            resp = supabase.table("quotes").insert(batch).execute()
-            print(
-                f"✅ Quotes batch {i}–{i + len(batch) - 1} "
-                f"(status: {getattr(resp, 'status_code', 'unknown')})"
-            )
-        except Exception as e:
-            print(f"❌ Quotes batch failed at index {i}: {e}")
-
+        supabase.table("quotes").insert(data[i : i + batch_size]).execute()
+    print(f"✅ Generated {total_records} quotes.")
 
 if __name__ == "__main__":
-    total = int(os.getenv("TOTAL_RECORDS", "10"))
-    batch = int(os.getenv("BATCH_SIZE", "10"))
-    main(total_records=total, batch_size=batch)
+    main(total=10)
