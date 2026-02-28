@@ -1,17 +1,17 @@
 import os
 import uuid
 import random
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from faker import Faker
 from supabase import create_client, Client
 
-# ---------- 1. CONNECTION ----------
+# ---------- 1. CONFIG & CONNECTION ----------
 SUPABASE_URL = "https://jxonjddldsakvxqklaqd.supabase.co"
 SUPABASE_KEY = "sb_secret_rZT7TG1WXbuazTIM9T53Rg_dtKkfI3s"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 fake = Faker("en_GB")
 
-# ---------- 2. CONSTANTS & DICTIONARIES ----------
+# ---------- 2. CONSTANTS ----------
 CAR_DATA = {
     "Ford": ["Fiesta", "Focus", "Puma", "Kuga"],
     "Tesla": ["Model 3", "Model Y", "Model S", "Model X"],
@@ -29,7 +29,6 @@ VEHICLE_USAGE = ["Social, domestic & pleasure", "SDP + commuting", "Business use
 PAYMENT_FREQUENCY = ["Annual", "Monthly"]
 
 # ---------- 3. HELPERS ----------
-
 def get_next_quote_start() -> int:
     try:
         resp = supabase.table("quotes").select("quote_id").order("quote_id", desc=True).limit(1).execute()
@@ -42,9 +41,6 @@ def get_next_quote_start() -> int:
 def generate_quote(i: int) -> dict:
     make = random.choice(list(CAR_DATA.keys()))
     model = random.choice(CAR_DATA[make])
-    
-    # Generate credit score (300-900)
-    # 15% High Risk, 65% Standard, 20% Prime
     credit_score = random.choices(
         [random.randint(300, 500), random.randint(501, 750), random.randint(751, 900)],
         weights=[15, 65, 20]
@@ -63,26 +59,22 @@ def generate_quote(i: int) -> dict:
         "credit_score": credit_score,
         "number_of_ccjs": random.choices([0, 1, 2], weights=[92, 6, 2])[0],
         "quoted_total_premium": float(round(random.uniform(350.00, 2500.00), 2)),
-        "status": "Quoted", # Status starts here
+        "status": "Quoted",
         "cover_type": random.choice(COVER_TYPES),
         "vehicle_usage": random.choice(VEHICLE_USAGE),
         "payment_frequency": random.choice(PAYMENT_FREQUENCY),
         "start_date": (date.today() + timedelta(days=random.randint(1, 30))).isoformat(),
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-
-# ---------- 4. MAIN EXECUTION ----------
 
 def main():
     start_idx = get_next_quote_start()
-    # Create a batch of 10 quotes
     data = [generate_quote(i) for i in range(start_idx, start_idx + 10)]
-    
     try:
         supabase.table("quotes").insert(data).execute()
-        print(f"✅ Successfully generated quotes q_{start_idx:07d} to q_{start_idx+9:07d}")
+        print(f"✅ Generated quotes q_{start_idx:07d} to q_{start_idx+9:07d}")
     except Exception as e:
-        print(f"❌ Database Insert Error: {e}")
+        print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     main()
