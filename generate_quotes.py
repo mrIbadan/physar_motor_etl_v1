@@ -50,9 +50,6 @@ EMAIL_DOMAINS = [
 # ---------- 3. HELPERS ----------
 
 def get_next_quote_start() -> int:
-    """
-    Continue quote_id from the highest existing q_XXXXXXX.
-    """
     try:
         resp = (
             supabase.table("quotes")
@@ -64,7 +61,7 @@ def get_next_quote_start() -> int:
         rows = getattr(resp, "data", []) or []
         if not rows:
             return 1
-        last_id = rows[0]["quote_id"]  # e.g. "q_0000123"
+        last_id = rows[0]["quote_id"]
         return int(last_id.split("_")[1]) + 1
     except Exception:
         return 1
@@ -88,12 +85,11 @@ def generate_quote(i: int) -> dict:
     make = random.choice(list(CAR_DATA.keys()))
     model = random.choice(CAR_DATA[make])
 
-    # credit_score bands: 15% high risk, 65% standard, 20% prime
     credit_score = random.choices(
         [
-            random.randint(300, 500),  # high risk
-            random.randint(501, 750),  # standard
-            random.randint(751, 900),  # prime
+            random.randint(300, 500),
+            random.randint(501, 750),
+            random.randint(751, 900),
         ],
         weights=[15, 65, 20],
     )[0]
@@ -139,7 +135,7 @@ def generate_quote(i: int) -> dict:
         "status": "Quoted",
         "created_at": datetime.utcnow().isoformat(),
         "credit_score": credit_score,
-        # rejection_reason is left to default NULL; will be set in generate_policies.py for rejects.
+        # rejection_reason left NULL by default
     }
 
 # ---------- 4. MAIN EXECUTION ----------
