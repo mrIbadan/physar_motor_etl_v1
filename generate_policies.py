@@ -21,10 +21,6 @@ REJECTION_REASONS = [
 # ---------- 3. HELPERS ----------
 
 def get_next_policy_start() -> int:
-    """
-    Get the next policy sequence number from policies.policy_id.
-    Uses the numeric tail of the highest existing policy_id.
-    """
     resp = (
         supabase.table("policies")
         .select("policy_id")
@@ -36,7 +32,7 @@ def get_next_policy_start() -> int:
     if not rows:
         return 1
 
-    last_id = rows[0]["policy_id"]  # e.g. "p_0000123"
+    last_id = rows[0]["policy_id"]
     try:
         return int(last_id.split("_")[1]) + 1
     except Exception:
@@ -44,18 +40,11 @@ def get_next_policy_start() -> int:
 
 
 def fetch_unconverted_quotes():
-    """
-    Return only quotes that do NOT already have a policy.
-    Checks the policies table directly so a quote is never converted twice,
-    even if the job reruns or overlaps.
-    """
-    # Step 1: get all quote_ids already converted to a policy
     resp = supabase.table("policies").select("quote_id").execute()
     already_converted = set(
         row["quote_id"] for row in (getattr(resp, "data", []) or []) if row.get("quote_id")
     )
 
-    # Step 2: get all quotes needed for policy creation
     resp = (
         supabase.table("quotes")
         .select(
@@ -67,17 +56,13 @@ def fetch_unconverted_quotes():
         .execute()
     )
     all_quotes = getattr(resp, "data", []) or []
-
-    # Step 3: return only unconverted quotes
     return [q for q in all_quotes if q["quote_id"] not in already_converted]
 
 
 def mark_rejected_quotes(converted_quote_ids: set[str]):
-    """
-    For quotes that did NOT convert in this run, set status and rejection_reason.
-    Only touches rows currently in status 'Quoted'.
-    """
-    # Fetch all currently quoted quotes
+    if not converted_quote_ids:
+        return
+
     resp = (
         supabase.table("quotes")
         .select("quote_id")
@@ -101,11 +86,6 @@ def mark_rejected_quotes(converted_quote_ids: set[str]):
 # ---------- 4. CORE LOGIC ----------
 
 def build_policy_rows(conversion_rate: float = 0.10):
-    """
-    Iterate over unconverted quotes and give each a `conversion_rate`
-    probability of becoming a policy (e.g. 0.10 = 10%).
-    Uses sensible defaults so policies never have nulls for core fields.
-    """
     unconverted = fetch_unconverted_quotes()
 
     if not unconverted:
@@ -116,13 +96,11 @@ def build_policy_rows(conversion_rate: float = 0.10):
     current_index = get_next_policy_start()
 
     for quote in unconverted:
-        # Probabilistic conversion: ~conversion_rate of quotes will pass this check.
         if random.random() > conversion_rate:
             continue
 
         start_date_str = quote.get("start_date")
         if not start_date_str:
-            # Skip badly formed quotes
             continue
 
         start_date = date.fromisoformat(start_date_str)
@@ -131,9 +109,8 @@ def build_policy_rows(conversion_rate: float = 0.10):
         gwp = float(quote["quoted_total_premium"])
         commission = round(gwp * 0.15, 2)
         ipt = round(gwp * 0.12, 2)
-        total = round(gwp + ipt, 2)  # GWP + 12% IPT
+        total = round(gwp + ipt, 2)
 
-        # Defaults to avoid nulls in policies
         cover_type = quote.get("cover_type") or "Comprehensive"
         payment_frequency = quote.get("payment_frequency") or "Annual"
         vehicle_usage = quote.get("vehicle_usage") or "Social, domestic & pleasure"
@@ -168,7 +145,7 @@ def build_policy_rows(conversion_rate: float = 0.10):
 # ---------- 5. ENTRY POINT ----------
 
 def main():
-    CONVERSION_RATE = 0.10  # 10% quote-to-policy
+    CONVERSION_RATE = 0.10
 
     policies = build_policy_rows(conversion_rate=CONVERSION_RATE)
 
@@ -178,11 +155,9 @@ def main():
 
     print(f"Converting {len(policies)} policies...")
     try:
-        # Insert policies
         supabase.table("policies").insert(policies).execute()
         print("✅ Success: New policies added.")
 
-        # Mark non-converted quotes as rejected
         converted_quote_ids = {p["quote_id"] for p in policies}
         mark_rejected_quotes(converted_quote_ids)
 
