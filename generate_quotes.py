@@ -1,4 +1,3 @@
-import os
 import uuid
 import random
 from datetime import datetime, date, timedelta
@@ -28,15 +27,14 @@ CAR_DATA = {
 }
 
 COVER_TYPES = ["Comprehensive", "Third Party", "Third Party, Fire and Theft"]
-VEHICLE_USAGE = ["Social, domestic & pleasure", "SDP + commuting", "Business use"]
-PAYMENT_FREQUENCY = ["Annual", "Monthly"]
-
 SEX_OPTIONS = ["Male", "Female"]
 MARITAL_STATUS = ["Single", "Married", "Divorced", "Widowed"]
 NATIONALITIES = ["UK", "EU", "Other"]
 EMPLOYMENT_STATUS = ["Employed", "Self-Employed", "Student", "Retired", "Unemployed"]
+VEHICLE_USAGE = ["Social, domestic & pleasure", "SDP + commuting", "Business use"]
 PARKING_OPTIONS = ["Garage", "Driveway", "On street", "Car park"]
 LICENCE_TYPES = ["Full UK", "Provisional", "EU", "International"]
+PAYMENT_FREQUENCY = ["Annual", "Monthly"]
 TRANSMISSION = ["Manual", "Automatic"]
 
 EMAIL_DOMAINS = [
