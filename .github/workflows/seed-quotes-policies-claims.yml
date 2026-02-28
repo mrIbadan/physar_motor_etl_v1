@@ -2,7 +2,7 @@ name: Seed Quotes, Policies, and Claims
 
 on:
   schedule:
-    - cron: "*/5 * * * *"      # every 5 minutes, 24/7 UTC
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
           pip install faker supabase python-dateutil
 
       - name: Debug - show script
-        run: cat generate_quotes.py | head -30
+        run: cat generate_quotes.py | head -40
 
       - name: Run quote generator
         run: python generate_quotes.py
@@ -42,7 +42,7 @@ jobs:
           pip install supabase python-dateutil
 
       - name: Debug - show script
-        run: cat generate_policies.py | head -30
+        run: cat generate_policies.py | head -40
 
       - name: Run policy generator
         run: python generate_policies.py
@@ -63,7 +63,7 @@ jobs:
           pip install supabase
 
       - name: Debug - show script
-        run: cat generate_claims.py | head -30
+        run: cat generate_claims.py | head -60
 
       - name: Run claim generator
         run: python generate_claims.py
