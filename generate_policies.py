@@ -70,7 +70,7 @@ def build_policy_rows(conversion_rate: float = 0.10):
     """
     Iterate over unconverted quotes and give each a `conversion_rate`
     probability of becoming a policy (e.g. 0.10 = 10%).
-    This mirrors real motor insurance: only some quotes bind.
+    Uses sensible defaults so policies never have nulls for core fields.
     """
     unconverted = fetch_unconverted_quotes()
 
@@ -99,14 +99,13 @@ def build_policy_rows(conversion_rate: float = 0.10):
         ipt = round(gwp * 0.12, 2)
         total = round(gwp + ipt, 2)  # GWP + 12% IPT
 
-        # --------- CHANGES START HERE: add defaults so policies never have nulls ---------
+        # Defaults to avoid nulls in policies
         cover_type = quote.get("cover_type") or "Comprehensive"
         payment_frequency = quote.get("payment_frequency") or "Annual"
         vehicle_usage = quote.get("vehicle_usage") or "Social, domestic & pleasure"
         car_make = quote.get("car_make") or "Unknown"
         car_model = quote.get("car_model") or "Unknown"
         abi_group = quote.get("abi_group") or 1
-        # --------- CHANGES END HERE ---------
 
         policy = {
             "policy_id": f"p_{current_index:07d}",
