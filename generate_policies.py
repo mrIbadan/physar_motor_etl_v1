@@ -1,7 +1,6 @@
 import os
-import uuid
 import random
-from datetime import date
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from supabase import create_client, Client
 
@@ -17,7 +16,7 @@ def get_next_policy_start() -> int:
     except: return 1
 
 def fetch_unprocessed_quotes():
-    # Only pull quotes that haven't been decided yet
+    # Only pull quotes that are still 'Quoted'
     resp = supabase.table("quotes").select("*").eq("status", "Quoted").execute()
     return getattr(resp, "data", []) or []
 
@@ -27,16 +26,28 @@ def build_policy_rows(conversion_rate: float = 0.10):
 
     policies_to_insert = []
     start_index = get_next_policy_start()
+    now = datetime.utcnow()
 
     for quote in unprocessed:
-        # --- PHASE 1: THE RATING ENGINE (Rejections) ---
-        if quote.get("credit_score", 0) < 450 or quote.get("number_of_ccjs", 0) > 1:
-            supabase.table("quotes").update({"status": "Rejected"}).eq("quote_id", quote["quote_id"]).execute()
+        # 1. EXPIRY CHECK (30 Minute Window)
+        created_at = datetime.fromisoformat(quote["created_at"].replace('Z', ''))
+        if now > created_at + timedelta(minutes=30):
+            supabase.table("quotes").update({
+                "status": "Expired",
+                "rejection_reason": "Quote session timed out (30m)"
+            }).eq("quote_id", quote["quote_id"]).execute()
             continue
 
-        # --- PHASE 2: CONVERSION CHANCE ---
+        # 2. RATING ENGINE (Declines)
+        if quote.get("credit_score", 0) < 450 or quote.get("number_of_ccjs", 0) > 1:
+            supabase.table("quotes").update({
+                "status": "Declined",
+                "rejection_reason": "Risk threshold: Credit/CCJ violation"
+            }).eq("quote_id", quote["quote_id"]).execute()
+            continue
+
+        # 3. CONVERSION (The 10% Who Buy)
         if random.random() <= conversion_rate:
-            # Mark Quote as Converted
             supabase.table("quotes").update({"status": "Converted"}).eq("quote_id", quote["quote_id"]).execute()
             
             start_date = date.fromisoformat(quote["start_date"])
@@ -53,8 +64,9 @@ def build_policy_rows(conversion_rate: float = 0.10):
                 "status": "Active",
             })
         else:
-            # User Abandoned (did not follow up)
-            supabase.table("quotes").update({"status": "Abandoned"}).eq("quote_id", quote["quote_id"]).execute()
+            # Note: We leave them as 'Quoted' so they have a chance to convert 
+            # in the next run, until the 30-minute expiry hits them.
+            pass
 
     return policies_to_insert
 
@@ -64,7 +76,7 @@ def main():
         supabase.table("policies").insert(policies).execute()
         print(f"✅ Created {len(policies)} policies.")
     else:
-        print("No quotes converted this run.")
+        print("No new conversions this run.")
 
 if __name__ == "__main__":
     main()
