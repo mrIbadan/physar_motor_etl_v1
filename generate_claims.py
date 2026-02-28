@@ -23,23 +23,22 @@ FAULT_OPTIONS = ["Fault", "Non-fault", "Split"]
 CLAIM_TYPES = ["Own damage", "TP property", "Injury", "Windscreen"]
 HANDLERS = ["Alex", "Jamie", "Taylor", "Jordan", "Morgan"]
 
-# Behavioural knobs
-MIN_DAYS_AFTER_START_FOR_CLAIM = 30      # no claims in first 30 days
-MAX_CLAIMS_PER_POLICY_PER_YEAR = 3       # hard cap
-P_CLAIMING_POLICY = 0.2                  # 20% of policies have >=1 claim
-P_SECOND_CLAIM_GIVEN_FIRST = 0.3         # 30% chance of a 2nd claim
-P_THIRD_CLAIM_GIVEN_SECOND = 0.1         # 10% chance of a 3rd claim
+# ---------- BEHAVIOUR RULES ----------
+MIN_DAYS_AFTER_START_FOR_CLAIM = 30       # no claims in first month
+MAX_CLAIMS_PER_POLICY_PER_YEAR = 3        # hard cap per policy per year
+P_CLAIMING_POLICY = 0.2                   # ~20% of policies have any claims at all
+P_SECOND_CLAIM_GIVEN_FIRST = 0.3          # given a 1st claim, 30% chance of a 2nd
+P_THIRD_CLAIM_GIVEN_SECOND = 0.1          # given a 2nd, 10% chance of a 3rd
 
 
 # ---------- 2. HELPERS ----------
 
 def fetch_candidate_policies(limit: int = 500) -> list[dict]:
     """
-    Fetch a pool of policies that are eligible for claims:
-    - Active policies.
+    Fetch policies that are eligible for claims:
+    - Active.
     - Started at least MIN_DAYS_AFTER_START_FOR_CLAIM days ago.
     """
-    today = date.today().isoformat()
     cutoff_date = (date.today() - timedelta(days=MIN_DAYS_AFTER_START_FOR_CLAIM)).isoformat()
 
     resp = (
@@ -56,15 +55,15 @@ def fetch_candidate_policies(limit: int = 500) -> list[dict]:
 
 def sample_claim_count_for_policy() -> int:
     """
-    Draw how many claims a single policy will have in the year.
+    Decide how many claims a policy should get in its policy year.
     - Most policies: 0 claims.
     - Some: 1 claim.
     - Few: 2–3 claims.
+    Never more than MAX_CLAIMS_PER_POLICY_PER_YEAR.
     """
     if random.random() > P_CLAIMING_POLICY:
         return 0
 
-    # At least 1 claim
     count = 1
     if count < MAX_CLAIMS_PER_POLICY_PER_YEAR and random.random() < P_SECOND_CLAIM_GIVEN_FIRST:
         count += 1
@@ -75,16 +74,18 @@ def sample_claim_count_for_policy() -> int:
 
 def build_one_claim_for_policy(policy: dict) -> dict:
     """
-    Build a single claim for a given policy, with loss_date/report_date
-    staggered realistically within the policy year.
+    Build a single claim for a given policy.
+    - Loss date is at least MIN_DAYS_AFTER_START_FOR_CLAIM after start.
+    - Loss is somewhere within the policy year.
     """
     start = date.fromisoformat(policy["policy_start_date"])
     end = date.fromisoformat(policy["policy_end_date"])
 
-    # Enforce min delay after inception
+    # Earliest possible loss = start + MIN_DAYS_AFTER_START_FOR_CLAIM
     earliest_loss = start + timedelta(days=MIN_DAYS_AFTER_START_FOR_CLAIM)
     if earliest_loss > end:
-        earliest_loss = start  # fallback if policy shorter than delay (unlikely in your setup)
+        # Fallback: if policy shorter than delay (unlikely), allow anywhere in policy
+        earliest_loss = start
 
     days_span = max((end - earliest_loss).days, 1)
     loss_date = earliest_loss + timedelta(days=random.randint(0, days_span))
@@ -102,15 +103,13 @@ def build_one_claim_for_policy(policy: dict) -> dict:
     else:
         incurred = round(random.uniform(300, 8000), 2)
 
-    # Simple paid vs outstanding split
+    # Paid vs outstanding split
     if random.random() < 0.6:
-        # Closed
         paid = incurred
         outstanding = 0.0
         claim_status = "Closed"
         settlement_date = report_date + timedelta(days=random.randint(1, 120))
     else:
-        # Open
         paid = round(incurred * random.uniform(0.0, 0.7), 2)
         outstanding = round(incurred - paid, 2)
         claim_status = "Open"
@@ -122,6 +121,7 @@ def build_one_claim_for_policy(policy: dict) -> dict:
         "uuid": str(uuid.uuid4()),
         "claim_id": f"c_{claim_seq:07d}",
         "policy_id": policy["policy_id"],
+
         "loss_date": loss_date.isoformat(),
         "report_date": report_date.isoformat(),
         "claim_status": claim_status,
@@ -129,13 +129,16 @@ def build_one_claim_for_policy(policy: dict) -> dict:
         "fault": random.choice(FAULT_OPTIONS),
         "claim_type": claim_type,
         "description": f"Synthetic {claim_type} claim",
+
         "incurred_amount": incurred,
         "paid_amount": paid,
         "outstanding_amount": outstanding,
+
         "handler_name": random.choice(HANDLERS),
         "settlement_date": (
             settlement_date.isoformat() if settlement_date else None
         ),
+
         "created_at": datetime.utcnow().isoformat(),
     }
 
@@ -144,11 +147,10 @@ def build_one_claim_for_policy(policy: dict) -> dict:
 
 def main(max_policies_to_sample: int = 50) -> None:
     """
-    For each sampled policy, decide how many claims it should have,
-    then create those claims, respecting:
-    - Min delay after start.
-    - Max claims per policy per year.
-    - Most policies having 0 claims.
+    Each run:
+    - Take up to max_policies_to_sample eligible policies.
+    - For each, decide 0–3 claims using the rules above.
+    - Insert all generated claims.
     """
     policies = fetch_candidate_policies(limit=max_policies_to_sample)
     if not policies:
@@ -180,6 +182,5 @@ def main(max_policies_to_sample: int = 50) -> None:
 
 
 if __name__ == "__main__":
-    # This parameter controls how many policies we consider per run
     max_policies = int(os.getenv("MAX_POLICIES_FOR_CLAIMS", "50"))
     main(max_policies_to_sample=max_policies)
