@@ -99,18 +99,27 @@ def build_policy_rows(conversion_rate: float = 0.10):
         ipt = round(gwp * 0.12, 2)
         total = round(gwp + ipt, 2)  # GWP + 12% IPT
 
+        # --------- CHANGES START HERE: add defaults so policies never have nulls ---------
+        cover_type = quote.get("cover_type") or "Comprehensive"
+        payment_frequency = quote.get("payment_frequency") or "Annual"
+        vehicle_usage = quote.get("vehicle_usage") or "Social, domestic & pleasure"
+        car_make = quote.get("car_make") or "Unknown"
+        car_model = quote.get("car_model") or "Unknown"
+        abi_group = quote.get("abi_group") or 1
+        # --------- CHANGES END HERE ---------
+
         policy = {
             "policy_id": f"p_{current_index:07d}",
             "quote_id": quote["quote_id"],
             "customer_uuid": quote["customer_uuid"],
             "policy_start_date": start_date.isoformat(),
             "policy_end_date": end_date.isoformat(),
-            "cover_type": quote.get("cover_type"),
-            "payment_frequency": quote.get("payment_frequency"),
-            "vehicle_usage": quote.get("vehicle_usage"),
-            "car_make": quote.get("car_make"),
-            "car_model": quote.get("car_model"),
-            "abi_group": quote.get("abi_group"),
+            "cover_type": cover_type,
+            "payment_frequency": payment_frequency,
+            "vehicle_usage": vehicle_usage,
+            "car_make": car_make,
+            "car_model": car_model,
+            "abi_group": abi_group,
             "gross_written_premium": gwp,
             "commission_amount": commission,
             "ipt_amount": ipt,
