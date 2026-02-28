@@ -47,6 +47,14 @@ EMAIL_DOMAINS = [
     "fakedomain.test",
 ]
 
+REJECTION_REASONS = [
+    "User Cancelled / Did not accept",
+    "User Declined due to UW rules",
+]
+
+CONVERSION_RATE = 0.10  # 10% Accepted vs 90% Rejected at quote creation
+
+
 # ---------- 3. HELPERS ----------
 
 def get_next_quote_start() -> int:
@@ -94,6 +102,14 @@ def generate_quote(i: int) -> dict:
         weights=[15, 65, 20],
     )[0]
 
+    # Decide Accepted vs Rejected at quote creation
+    if random.random() < CONVERSION_RATE:
+        status = "Accepted"
+        rejection_reason = None
+    else:
+        status = "Rejected"
+        rejection_reason = random.choice(REJECTION_REASONS)
+
     return {
         "uuid": str(uuid.uuid4()),
         "quote_id": f"q_{i:07d}",
@@ -132,22 +148,22 @@ def generate_quote(i: int) -> dict:
         "breakdown_cover": random.choice([True, False]),
         "courtesy_car": random.choice([True, False]),
         "quoted_total_premium": float(round(random.uniform(350.00, 2500.00), 2)),
-        "status": "Quoted",
+        "status": status,                 # Accepted or Rejected
+        "rejection_reason": rejection_reason,
         "created_at": datetime.utcnow().isoformat(),
         "credit_score": credit_score,
-        # rejection_reason left NULL by default
     }
 
-# ---------- 4. MAIN EXECUTION ----------
 
 def main():
     start_idx = get_next_quote_start()
     data = [generate_quote(i) for i in range(start_idx, start_idx + 10)]
     try:
         supabase.table("quotes").insert(data).execute()
-        print(f"✅ Successfully generated quotes q_{start_idx:07d} to q_{start_idx+9:07d}")
+        print(f"✅ Generated quotes q_{start_idx:07d} to q_{start_idx+9:07d}")
     except Exception as e:
         print(f"❌ Database Insert Error: {e}")
+
 
 if __name__ == "__main__":
     main()
