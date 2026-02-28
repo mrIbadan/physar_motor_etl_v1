@@ -139,7 +139,7 @@ def generate_quote(i: int) -> dict:
         "status": "Quoted",
         "created_at": datetime.utcnow().isoformat(),
         "credit_score": credit_score,
-        # DO NOT set rejection_reason here; let policies script fill it for rejects.
+        # rejection_reason is left to default NULL; will be set in generate_policies.py for rejects.
     }
 
 # ---------- 4. MAIN EXECUTION ----------
