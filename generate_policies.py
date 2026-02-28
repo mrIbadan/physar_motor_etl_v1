@@ -39,13 +39,14 @@ def get_next_policy_start() -> int:
 def fetch_unconverted_quotes():
     """
     Return only quotes that do NOT already have a policy.
-    Checks the policies table directly so a quote is never converted twice,
-    even if the job reruns or overlaps.
+    Checks the policies table directly so a quote is never converted twice.
     """
     # Step 1: get all quote_ids already converted to a policy
     resp = supabase.table("policies").select("quote_id").execute()
     already_converted = set(
-        row["quote_id"] for row in (getattr(resp, "data", []) or []) if row.get("quote_id")
+        row["quote_id"]
+        for row in (getattr(resp, "data", []) or [])
+        if row.get("quote_id")
     )
 
     # Step 2: get all quotes needed for policy creation
@@ -82,13 +83,13 @@ def build_policy_rows(conversion_rate: float = 0.10):
     current_index = get_next_policy_start()
 
     for quote in unconverted:
-        # Realistic conversion: ~conversion_rate of quotes will pass this check.
+        # Probabilistic conversion: ~conversion_rate of quotes will pass this check.
         if random.random() > conversion_rate:
             continue
 
         start_date_str = quote.get("start_date")
         if not start_date_str:
-            # Skip badly formed quotes
+            # Skip quotes without a start date
             continue
 
         start_date = date.fromisoformat(start_date_str)
@@ -108,11 +109,11 @@ def build_policy_rows(conversion_rate: float = 0.10):
         abi_group = quote.get("abi_group") or 1
 
         policy = {
-            "policy_id": f"p_{current_index:07d}",
-            "quote_id": quote["quote_id"],
-            "customer_uuid": quote["customer_uuid"],
-            "policy_start_date": start_date.isoformat(),
-            "policy_end_date": end_date.isoformat(),
+            "policy_id": f"p_{current_index:07d}",           # required, unique
+            "quote_id": quote["quote_id"],                   # FK to quotes.quote_id
+            "customer_uuid": quote["customer_uuid"],         # same customer as quote
+            "policy_start_date": start_date.isoformat(),     # required
+            "policy_end_date": end_date.isoformat(),         # required
             "cover_type": cover_type,
             "payment_frequency": payment_frequency,
             "vehicle_usage": vehicle_usage,
