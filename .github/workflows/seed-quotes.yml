@@ -2,7 +2,6 @@ name: Seed Supabase Quotes
 
 on:
   schedule:
-    # Every 10 minutes between 06:00 and 18:59 UTC, every day
     - cron: "*/10 6-18 * * *"
   workflow_dispatch:
 
@@ -18,17 +17,24 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip' # This helps with speed and consistency
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install faker supabase
-
-      - name: Run generator
+      - name: Install and Run
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}   # once you move off hardcoded
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          TOTAL_RECORDS: "10"
+          TOTAL_RECORDS: "50"
           BATCH_SIZE: "10"
         run: |
-          python generate_quotes.py
+          # 1. Upgrade pip
+          python -m pip install --upgrade pip
+          
+          # 2. Force install everything using the python module 
+          # This ensures numpy goes EXACTLY where python 3.11 is looking
+          python -m pip install numpy pandas faker supabase python-dateutil
+          
+          # 3. Check if they actually installed (for the logs)
+          python -c "import numpy; print('Numpy version:', numpy.__version__)"
+          
+          # 4. Run the script
+          python generate_quotes_april.py
