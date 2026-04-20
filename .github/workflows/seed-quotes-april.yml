@@ -1,4 +1,4 @@
-name: Seed Supabase Quotes
+name: Seed Supabase Quotes 
 
 on:
   schedule:
