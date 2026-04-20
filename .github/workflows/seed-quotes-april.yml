@@ -28,5 +28,4 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           TOTAL_RECORDS: "50"
           BATCH_SIZE: "10"
-        run: |
-          python generate_quotes_april.py
+        run: python generate_quotes_april.py
