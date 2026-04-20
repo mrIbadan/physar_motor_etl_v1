@@ -13,30 +13,21 @@ from supabase import create_client, Client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# ---------- DEBUGGING SECRETS ----------
-if not SUPABASE_URL:
-    print("❌ SUPABASE_URL is MISSING in environment")
-else:
-    print(f"✅ SUPABASE_URL is detected (Length: {len(SUPABASE_URL)})")
-
-if not SUPABASE_KEY:
-    print("❌ SUPABASE_KEY is MISSING in environment")
-else:
-    print(f"✅ SUPABASE_KEY is detected (Starts with: {SUPABASE_KEY[:5]}...)")
-
+# Debugging headers to verify secrets are reaching the script
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set in GitHub Secrets")
+    print("❌ ERROR: SUPABASE_URL or SUPABASE_KEY is missing from environment.")
+    raise RuntimeError("Ensure GitHub Secrets are mapped in your YAML file.")
+else:
+    print(f"✅ Connection Detected. URL Length: {len(SUPABASE_URL)}")
 
-# Initialize Supabase Client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 fake = Faker("en_GB")
 
-# Control constants
 TOTAL_RECORDS = int(os.getenv("TOTAL_RECORDS", "50"))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "10"))
-TARGET_CONVERSION_RATE = 0.10  # 10%
+TARGET_CONVERSION_RATE = 0.10 
 
-# ---------- 1. DATA CONSTANTS ----------
+# ---------- 1. CONSTANTS ----------
 CAR_DATA = {
     "Ford": ["Fiesta", "Focus", "Puma", "Kuga"],
     "Tesla": ["Model 3", "Model Y", "Model S", "Model X"],
@@ -47,65 +38,48 @@ CAR_DATA = {
 }
 
 EMAIL_DOMAINS = ["youmail.com", "randommail.com", "testmail.net", "demoemail.org"]
-REJECTION_REASONS = ["User Cancelled / Did not accept", "User Declined due to UW rules"]
+REJECTION_REASONS = ["User Cancelled", "User Declined", "Underwriting Rules"]
 
 # ---------- 2. HELPERS ----------
 
-def generate_realistic_occupation() -> Tuple[str, str, str]:
-    industries = {
-        "Technology": {"Software Engineer": ["Frontend Dev", "Backend Dev"], "Data Scientist": ["Analyst"]},
-        "Healthcare": {"Doctor": ["GP", "Surgeon"], "Nurse": ["Staff Nurse"]},
-        "Finance": {"Accountant": ["Tax Accountant"], "Banker": ["Investment Banker"]}
-    }
-    industry = random.choice(list(industries.keys()))
-    occupation = random.choice(list(industries[industry].keys()))
-    job_title = random.choice(industries[industry][occupation])
-    return industry, occupation, job_title
-
 def calculate_conversion_probability(ncd: int, credit_band: str) -> float:
+    """Calculates probability with safety clipping to prevent JSON Infinity errors."""
     try:
         w = ncd * 35
         if credit_band == "Excellent": w += 45
         
         logit = -3.0 + (0.02 * w)
-        # FIX: Clip the logit to prevent Infinity errors during np.exp
+        # LAYER 1: Prevent logit from reaching values that make exp() return Infinity
         logit = np.clip(logit, -20, 20)
         
         prob = 1.0 / (1.0 + np.exp(-logit))
         
-        # FINAL SAFETY: Ensure result is a standard Python float, not a NumPy float
-        val = float(np.nan_to_num(prob, nan=0.01))
-        return val
+        # LAYER 2: Final cast to standard Python float and NaN check
+        return float(np.nan_to_num(prob, nan=0.01))
     except:
         return 0.01
 
 def get_next_quote_start() -> int:
     try:
         resp = supabase.table("quotes").select("quote_id").order("quote_id", desc=True).limit(1).execute()
-        rows = resp.data or []
-        if not rows: return 1
-        # Extract the numeric part of the last quote ID
-        return int(rows[0]["quote_id"].split("_")[1]) + 1
-    except: 
+        if resp.data:
+            return int(resp.data[0]["quote_id"].split("_")[1]) + 1
+        return 1
+    except:
         return random.randint(1000, 9999)
 
-# ---------- 3. ROW GENERATION (SYNCED WITH SQL SCHEMA) ----------
+# ---------- 3. ROW GENERATION ----------
 
 def generate_quote_row(i: int, customer_uuid: str) -> Dict[str, Any]:
     age = int(random.randint(18, 75))
     make = random.choice(list(CAR_DATA.keys()))
-    industry, occupation, job_title = generate_realistic_occupation()
     credit_band = random.choice(['Excellent', 'Good', 'Fair'])
     ncd = int(random.randint(0, 9))
     
-    # Premium Logic
     postcode_risk = int(random.randint(1, 10))
     base_premium = 500.0
     risk_multiplier = max(0.5, min(3.0, 1.0 + (postcode_risk - 5) * 0.05))
     total_premium = float(round(base_premium * risk_multiplier * random.uniform(0.9, 1.1), 2))
-
-    # Calculate Probability
-    conv_prob = calculate_conversion_probability(ncd, credit_band)
 
     return {
         "uuid": str(uuid.uuid4()),
@@ -119,29 +93,24 @@ def generate_quote_row(i: int, customer_uuid: str) -> Dict[str, Any]:
         "car_model": random.choice(CAR_DATA[make]),
         "quoted_total_premium": total_premium,
         "status": "Pending",
-        "conversion_probability": conv_prob,
+        "conversion_probability": calculate_conversion_probability(ncd, credit_band),
         "created_at": datetime.utcnow().isoformat(),
         "postcode_risk_band": postcode_risk,
-        "occupation": occupation,
-        "job_title": job_title,
         "abi_group": int(random.randint(1, 50)),
         "transmission": random.choice(["Manual", "Automatic"]),
-        "employment_status": random.choice(["Employed", "Self-Employed"]),
-        "marital_status": random.choice(["Single", "Married", "Divorced"]),
+        "employment_status": "Employed",
+        "marital_status": random.choice(["Single", "Married"]),
         "number_of_ncd_years": ncd,
         "credit_score_band": credit_band,
-        "estimated_annual_mileage": int(random.randint(4000, 15000)),
-        "cover_type": random.choice(["Comprehensive", "Third Party"]),
+        "estimated_annual_mileage": int(random.randint(4000, 12000)),
+        "cover_type": "Comprehensive",
         "has_blackbox": bool(random.choice([True, False])),
         "home_owner": bool(random.choice([True, False])),
-        "sex": random.choice(["Male", "Female"]),
         "nationality": "UK",
-        "driving_licence_type": "Full UK",
-        "driving_licence_years": int(random.randint(1, 40)),
-        "payment_frequency": random.choice(["Annual", "Monthly"])
+        "driving_licence_type": "Full UK"
     }
 
-# ---------- 4. BATCH LOGIC & CLEANING ----------
+# ---------- 4. BATCH LOGIC & FINAL CLEANING ----------
 
 def generate_quotes_batch(total_records: int) -> pd.DataFrame:
     start_idx = get_next_quote_start()
@@ -149,44 +118,44 @@ def generate_quotes_batch(total_records: int) -> pd.DataFrame:
     
     df = pd.DataFrame(rows)
     
-    # Sort and Apply Conversion Logic
+    # Sort and assign statuses
     df = df.sort_values("conversion_probability", ascending=False).reset_index(drop=True)
     n_accept = int(TARGET_CONVERSION_RATE * len(df))
     df["status"] = "Rejected"
     df.loc[:n_accept-1, "status"] = "Accepted"
     
-    # Rejection reasons for non-accepted quotes
+    # Rejection reasons
     df.loc[df["status"] == "Rejected", "rejection_reason"] = [random.choice(REJECTION_REASONS) for _ in range(len(df) - n_accept)]
     
-    # FINAL CLEANING: Convert any Inf/NaN to None (JSON null)
+    # LAYER 3: CRITICAL CLEANING FOR JSON COMPLIANCE
+    # This replaces any Inf or NaN with a real Python None (which becomes SQL NULL)
     df = df.replace([np.inf, -np.inf], np.nan)
-    # Using .where with pd.notnull(df), None ensures JSON compliance
     df = df.where(pd.notnull(df), None)
     
     return df
 
-# ---------- 5. THE PUSH LOGIC ----------
+# ---------- 5. THE PUSH ----------
 
 def main():
-    print(f"🚀 Initializing push to Supabase: {TOTAL_RECORDS} records.")
+    print(f"🚀 Generating {TOTAL_RECORDS} records for Supabase...")
     df = generate_quotes_batch(TOTAL_RECORDS)
     
-    # Convert dataframe to list of dictionaries
+    # Convert back to list of dictionaries for Supabase
     records = df.to_dict(orient="records")
 
     for i in range(0, len(records), BATCH_SIZE):
         batch = records[i:i+BATCH_SIZE]
         try:
-            # Pushes to the "public.quotes" table
             response = supabase.table("quotes").insert(batch).execute()
             
             if response.data:
-                print(f"✅ BATCH SUCCESS: Inserted rows {i} to {i+len(batch)-1}")
+                print(f"✅ Batch Success: Rows {i} to {i+len(batch)-1} uploaded.")
             else:
-                print(f"⚠️ BATCH EMPTY: Success message received but 0 rows saved. Check RLS Policies.")
+                print(f"⚠️ Batch Empty. Possible RLS block.")
                 
         except Exception as e:
-            print(f"❌ CRITICAL ERROR on batch {i}: {e}")
+            # This will now catch specific database errors instead of JSON float errors
+            print(f"❌ ERROR ON BATCH {i}: {str(e)}")
             break
 
 if __name__ == "__main__":
