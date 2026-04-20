@@ -17,24 +17,23 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: 'pip' # This helps with speed and consistency
 
-      - name: Install and Run
+      - name: Force Install and Run
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           TOTAL_RECORDS: "50"
-          BATCH_SIZE: "10"
         run: |
-          # 1. Upgrade pip
-          python -m pip install --upgrade pip
+          # 1. Force the install using the module path
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user numpy pandas faker supabase python-dateutil
           
-          # 2. Force install everything using the python module 
-          # This ensures numpy goes EXACTLY where python 3.11 is looking
-          python -m pip install numpy pandas faker supabase python-dateutil
+          # 2. Add the user site-packages to the PATH just in case
+          export PATH=$PATH:$(python3 -m site --user-base)/bin
           
-          # 3. Check if they actually installed (for the logs)
-          python -c "import numpy; print('Numpy version:', numpy.__version__)"
+          # 3. DIAGNOSTIC: Check if numpy is actually importable right now
+          echo "--- Diagnostic Check ---"
+          python3 -c "import numpy; print('Numpy Location:', numpy.__file__)" || echo "NUMPY STILL NOT FOUND"
           
-          # 4. Run the script
-          python generate_quotes_april.py
+          # 4. RUN: Use 'python3' explicitly
+          python3 generate_quotes_april.py
