@@ -18,13 +18,14 @@ fake = Faker("en_GB")
 TOTAL_RECORDS = int(os.getenv("TOTAL_RECORDS", "50"))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "10"))
 
-# ---------- 1. DATA GENERATION ----------
+# ---------- 1. HELPERS ----------
 def calculate_conversion_probability(ncd, credit_band):
     w = ncd * 35
     if credit_band == "Excellent": w += 45
     logit = -3.0 + (0.02 * w)
-    # Clipping to prevent math from becoming Infinity
-    logit = max(-15, min(15, logit))
+    # CLIP THE LOGIT: If logit > 700, exp(logit) is Infinity. 
+    # Clipping at 20 keeps the probability near 1.0 but safe for JSON.
+    logit = max(-20, min(20, logit))
     return float(1.0 / (1.0 + math.exp(-logit)))
 
 def generate_quote_row(i):
@@ -39,7 +40,7 @@ def generate_quote_row(i):
         "title": random.choice(["Mr", "Mrs", "Miss", "Ms", "Dr"]),
         "first_name": fake.first_name(),
         "last_name": fake.last_name(),
-        "email_address": f"{fake.first_name().lower()}@example.com",
+        "email_address": f"{fake.first_name().lower()}@testmail.com",
         "date_of_birth": (date.today() - timedelta(days=age*365)).isoformat(),
         "sex": random.choice(["Male", "Female"]),
         "nationality": "UK",
@@ -68,52 +69,51 @@ def generate_quote_row(i):
         "created_at": datetime.utcnow().isoformat()
     }
 
-# ---------- 2. THE ERROR ISOLATOR ----------
-def validate_batch_json(batch):
-    """Checks every value for JSON compliance before we even talk to Supabase."""
+# ---------- 2. THE SERIALIZATION SCANNER ----------
+def scan_for_bad_floats(batch):
+    """Manually inspects the batch to find exactly which key is breaking JSON."""
     for row_idx, row in enumerate(batch):
-        for key, value in row.items():
+        for k, v in row.items():
+            if isinstance(v, float):
+                if math.isinf(v) or math.isnan(v):
+                    print(f"💥 FOUND THE ARSEHOLE: Row {row_idx}, Column '{k}' is {v}!")
+                    return False
             try:
-                json.dumps({key: value})
+                json.dumps({k: v})
             except (ValueError, OverflowError):
-                print(f"\n💥 FOUND THE ARSEHOLE!")
-                print(f"Row Index: {row_idx}")
-                print(f"Quote ID: {row.get('quote_id')}")
-                print(f"Column: '{key}'")
-                print(f"Value: {value} (Type: {type(value)})")
-                print(f"Check if value is Inf or NaN: {math.isinf(value) if isinstance(value, float) else 'N/A'}")
+                print(f"💥 SERIALIZATION FAILURE: Column '{k}' with value {v} (Type: {type(v)})")
                 return False
     return True
 
 # ---------- 3. MAIN ----------
 def main():
-    print(f"🚀 Initializing push: {TOTAL_RECORDS} records.")
+    print(f"🚀 Initializing push for {TOTAL_RECORDS} records.")
     
     # Generate data
-    data = [generate_quote_row(i) for i in range(1, TOTAL_RECORDS + 1)]
+    raw_data = [generate_quote_row(i) for i in range(1, TOTAL_RECORDS + 1)]
     
-    # Sort and Status Logic
-    df = pd.DataFrame(data)
+    # Logic via Pandas
+    df = pd.DataFrame(raw_data)
     df = df.sort_values("conversion_probability", ascending=False).reset_index(drop=True)
     
     n_accept = int(0.10 * len(df))
     df["status"] = "Rejected"
     df.loc[:n_accept-1, "status"] = "Accepted"
-    df.loc[df["status"] == "Rejected", "rejection_reason"] = "Risk/Price Mismatch"
+    df.loc[df["status"] == "Rejected", "rejection_reason"] = "Pricing threshold not met"
 
-    # Convert to pure Python list of dicts
-    records = df.to_dict(orient="records")
+    # Convert to pure Python types (Sanitization)
+    # Using .to_json() and back to .from_json() is a 'cheat code' to force standard types
+    records = json.loads(df.to_json(orient="records"))
 
     for i in range(0, len(records), BATCH_SIZE):
         batch = records[i:i+BATCH_SIZE]
         
-        # --- NEW: ISOLATION CHECK ---
-        if not validate_batch_json(batch):
-            print("🛑 Stopping script because invalid data was found.")
+        # PRE-FLIGHT CHECK
+        if not scan_for_bad_floats(batch):
+            print("🛑 Stopping. Fix the math in the columns listed above.")
             return
 
         try:
-            # Pushes to Supabase
             supabase.table("quotes").insert(batch).execute()
             print(f"✅ Batch {i//BATCH_SIZE + 1} pushed.")
         except Exception as e:
