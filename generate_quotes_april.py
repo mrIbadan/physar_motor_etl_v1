@@ -13,6 +13,20 @@ from supabase import create_client, Client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+# ---------- DEBUGGING SECRETS ----------
+if not SUPABASE_URL:
+    print("❌ SUPABASE_URL is MISSING in environment")
+else:
+    print(f"✅ SUPABASE_URL is detected (Length: {len(SUPABASE_URL)})")
+
+if not SUPABASE_KEY:
+    print("❌ SUPABASE_KEY is MISSING in environment")
+else:
+    # This shows the first 5 characters only so you can verify it's the right key
+    # (e.g., 'eyJhb...' for service_role) without leaking the whole thing.
+    print(f"✅ SUPABASE_KEY is detected (Starts with: {SUPABASE_KEY[:5]}...)")
+# ---------------------------------------
+
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set in GitHub Secrets")
 
