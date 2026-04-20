@@ -2,7 +2,6 @@ name: Seed Supabase Quotes
 
 on:
   schedule:
-    # Every 10 minutes between 06:00 and 18:59 UTC, every day
     - cron: "*/10 6-18 * * *"
   workflow_dispatch:
 
@@ -19,13 +18,18 @@ jobs:
         with:
           python-version: "3.11"
 
+      # DEBUG STEP: This will print the files in your repo to the log
+      # If you don't see 'requirements.txt' here, that's why it's failing
+      - name: List files for debug
+        run: ls -R
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # THIS IS THE KEY FIX:
+          # Force install everything directly to bypass any file location issues
+          pip install pandas numpy faker supabase python-dateutil
+          # Also try the file if it exists
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          # Keep these as fallbacks if they aren't in your requirements.txt
-          pip install faker supabase
 
       - name: Run generator
         env:
