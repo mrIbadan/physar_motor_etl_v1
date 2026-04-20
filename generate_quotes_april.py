@@ -11,8 +11,9 @@ from supabase import create_client, Client
 
 # ---------- 0. CONFIG FROM ENV ----------
 
-SUPABASE_URL = os.getenv("https://nykdyzhihohynrujxzgi.supabase.co")
-SUPABASE_KEY = os.getenv("sb_publishable_rXmxD30iR2zcNS7HfDQtYQ_O8tuChCa")
+# These names MUST match the "Name" you gave the secrets in GitHub
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set in the environment")
