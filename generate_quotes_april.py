@@ -20,11 +20,10 @@ BATCH_SIZE = int(os.getenv("BATCH_SIZE", "10"))
 
 # ---------- 1. DATA GENERATION ----------
 def calculate_conversion_probability(ncd, credit_band):
-    """Calculates probability with strict logit clipping."""
     w = ncd * 35
     if credit_band == "Excellent": w += 45
     logit = -3.0 + (0.02 * w)
-    # Clip to avoid Inf
+    # Clipping to prevent math from becoming Infinity
     logit = max(-15, min(15, logit))
     return float(1.0 / (1.0 + math.exp(-logit)))
 
@@ -69,31 +68,32 @@ def generate_quote_row(i):
         "created_at": datetime.utcnow().isoformat()
     }
 
-# ---------- 2. THE SERIALIZATION GUARDIAN ----------
-def safe_json_value(v):
-    """Forces every single value into a JSON-compliant standard Python type."""
-    if v is None:
-        return None
-    if isinstance(v, (bool, str)):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return int(v)
-    if isinstance(v, (float, np.floating)):
-        if math.isinf(v) or math.isnan(v):
-            return None
-        # Limit precision to prevent float-point errors
-        return round(float(v), 6)
-    return str(v)
+# ---------- 2. THE ERROR ISOLATOR ----------
+def validate_batch_json(batch):
+    """Checks every value for JSON compliance before we even talk to Supabase."""
+    for row_idx, row in enumerate(batch):
+        for key, value in row.items():
+            try:
+                json.dumps({key: value})
+            except (ValueError, OverflowError):
+                print(f"\n💥 FOUND THE ARSEHOLE!")
+                print(f"Row Index: {row_idx}")
+                print(f"Quote ID: {row.get('quote_id')}")
+                print(f"Column: '{key}'")
+                print(f"Value: {value} (Type: {type(value)})")
+                print(f"Check if value is Inf or NaN: {math.isinf(value) if isinstance(value, float) else 'N/A'}")
+                return False
+    return True
 
 # ---------- 3. MAIN ----------
 def main():
-    print(f"🚀 Generating {TOTAL_RECORDS} records...")
+    print(f"🚀 Initializing push: {TOTAL_RECORDS} records.")
     
-    # 1. Generate using pure list of dicts first
-    raw_data = [generate_quote_row(i) for i in range(1, TOTAL_RECORDS + 1)]
+    # Generate data
+    data = [generate_quote_row(i) for i in range(1, TOTAL_RECORDS + 1)]
     
-    # 2. Use Pandas ONLY for the sorting/status logic
-    df = pd.DataFrame(raw_data)
+    # Sort and Status Logic
+    df = pd.DataFrame(data)
     df = df.sort_values("conversion_probability", ascending=False).reset_index(drop=True)
     
     n_accept = int(0.10 * len(df))
@@ -101,31 +101,23 @@ def main():
     df.loc[:n_accept-1, "status"] = "Accepted"
     df.loc[df["status"] == "Rejected", "rejection_reason"] = "Risk/Price Mismatch"
 
-    # 3. BRUTE FORCE CONVERSION back to standard Python types
-    # This strips away ALL NumPy metadata that breaks JSON
-    records = []
-    for _, row in df.iterrows():
-        clean_row = {str(k): safe_json_value(v) for k, v in row.items()}
-        records.append(clean_row)
+    # Convert to pure Python list of dicts
+    records = df.to_dict(orient="records")
 
-    # 4. PUSH
     for i in range(0, len(records), BATCH_SIZE):
         batch = records[i:i+BATCH_SIZE]
+        
+        # --- NEW: ISOLATION CHECK ---
+        if not validate_batch_json(batch):
+            print("🛑 Stopping script because invalid data was found.")
+            return
+
         try:
-            # Final validation check
-            json.dumps(batch)
-            
+            # Pushes to Supabase
             supabase.table("quotes").insert(batch).execute()
             print(f"✅ Batch {i//BATCH_SIZE + 1} pushed.")
         except Exception as e:
-            print(f"❌ FATAL ERROR on Batch {i}: {e}")
-            # Identify exact problematic key
-            for row in batch:
-                for k, v in row.items():
-                    try:
-                        json.dumps(v)
-                    except:
-                        print(f"🚨 ILLEGAL KEY: {k} | VALUE: {v} | TYPE: {type(v)}")
+            print(f"❌ DATABASE ERROR on Batch {i}: {e}")
             break
 
 if __name__ == "__main__":
